@@ -39,6 +39,7 @@ export interface AuditRecord {
   timestamp: number; // Unix timestamp
   teamMember: string;
   notes?: string;
+  evidencePhotos?: string[];
 }
 
 export enum AppView {

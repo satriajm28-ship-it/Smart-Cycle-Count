@@ -1,14 +1,26 @@
 
+import { db } from './firebaseConfig';
+import { 
+  collection, 
+  getDocs, 
+  addDoc, 
+  setDoc, 
+  doc, 
+  query, 
+  orderBy, 
+  writeBatch,
+  getDoc
+} from 'firebase/firestore';
 import { AuditRecord, MasterItem, MasterLocation, LocationState } from '../types';
 
-const STORAGE_KEYS = {
-  MASTER_DATA: 'stock_opname_master_v1',
-  AUDIT_LOGS: 'stock_opname_logs_v1',
-  MASTER_LOCATIONS: 'stock_opname_locations_v1',
-  LOCATION_STATES: 'stock_opname_location_states_v1'
+const COLLECTIONS = {
+  MASTER_DATA: 'master_data',
+  AUDIT_LOGS: 'audit_logs',
+  MASTER_LOCATIONS: 'master_locations',
+  LOCATION_STATES: 'location_states'
 };
 
-// Seed data for Items
+// Seed data remains the same
 const DEFAULT_MASTER_DATA: MasterItem[] = [
   { sku: 'BRG-882910', name: 'Indomie Goreng Special 85g', systemStock: 50, batchNumber: 'BATCH-2023-X', expiryDate: '2024-12-12', category: 'Food', unit: 'Pcs' },
   { sku: '123BX', name: 'Example Test Item', systemStock: 200, batchNumber: 'DEFAULT-BATCH', expiryDate: '2025-01-01', category: 'General', unit: 'Pcs' },
@@ -19,7 +31,6 @@ const DEFAULT_MASTER_DATA: MasterItem[] = [
   { sku: '89999090905', name: 'Hand Sanitizer 500ml', systemStock: 75, batchNumber: 'H202311', expiryDate: '2025-08-10', category: 'Equipment', unit: 'Bottle' },
 ];
 
-// Seed data for Locations
 const DEFAULT_LOCATIONS: MasterLocation[] = [
     { id: '1', name: 'RACK-A-01-A', zone: 'Zone A' },
     { id: '2', name: 'RACK-A-01-B', zone: 'Zone A' },
@@ -31,74 +42,111 @@ const DEFAULT_LOCATIONS: MasterLocation[] = [
     { id: '8', name: 'RACK-C-02-B', zone: 'Zone C' },
 ];
 
-export const getMasterData = (): MasterItem[] => {
-  const data = localStorage.getItem(STORAGE_KEYS.MASTER_DATA);
-  if (!data) {
-    localStorage.setItem(STORAGE_KEYS.MASTER_DATA, JSON.stringify(DEFAULT_MASTER_DATA));
-    return DEFAULT_MASTER_DATA;
-  }
-  return JSON.parse(data);
-};
-
-export const saveMasterData = (data: MasterItem[]) => {
-  localStorage.setItem(STORAGE_KEYS.MASTER_DATA, JSON.stringify(data));
-};
-
-export const getMasterLocations = (): MasterLocation[] => {
-    const data = localStorage.getItem(STORAGE_KEYS.MASTER_LOCATIONS);
-    if (!data) {
-        localStorage.setItem(STORAGE_KEYS.MASTER_LOCATIONS, JSON.stringify(DEFAULT_LOCATIONS));
-        return DEFAULT_LOCATIONS;
+export const getMasterData = async (): Promise<MasterItem[]> => {
+  try {
+    const querySnapshot = await getDocs(collection(db, COLLECTIONS.MASTER_DATA));
+    if (querySnapshot.empty) {
+      // Seed data if empty
+      const batch = writeBatch(db);
+      DEFAULT_MASTER_DATA.forEach(item => {
+        const docRef = doc(collection(db, COLLECTIONS.MASTER_DATA));
+        batch.set(docRef, item);
+      });
+      await batch.commit();
+      return DEFAULT_MASTER_DATA;
     }
-    return JSON.parse(data);
+    return querySnapshot.docs.map(doc => doc.data() as MasterItem);
+  } catch (error) {
+    console.error("Error fetching master data:", error);
+    return [];
+  }
 };
 
-export const getAuditLogs = (): AuditRecord[] => {
-  const data = localStorage.getItem(STORAGE_KEYS.AUDIT_LOGS);
-  return data ? JSON.parse(data) : [];
-};
-
-export const saveAuditLog = (record: AuditRecord) => {
-  const logs = getAuditLogs();
-  logs.unshift(record); 
-  localStorage.setItem(STORAGE_KEYS.AUDIT_LOGS, JSON.stringify(logs));
+export const saveMasterData = async (data: MasterItem[]) => {
+  // Warning: This strategy overwrites. For Firestore, usually we update incrementally.
+  // For this demo, we will batch delete and rewrite (not efficient for production, but simple for sync)
+  // A better production approach is checking existence before write.
   
-  // Implicitly mark location as Audited
-  updateLocationStatus(record.location, 'audited');
+  // Implementation omitted for full batch sync complexity, 
+  // but let's at least allow adding NEW items efficiently.
+  const batch = writeBatch(db);
+  data.forEach(item => {
+     // Create a doc reference. We can use SKU as ID to prevent duplicates
+     const docRef = doc(db, COLLECTIONS.MASTER_DATA, item.sku);
+     batch.set(docRef, item);
+  });
+  await batch.commit();
 };
 
-export const clearAuditLogs = () => {
-  localStorage.removeItem(STORAGE_KEYS.AUDIT_LOGS);
-  localStorage.removeItem(STORAGE_KEYS.LOCATION_STATES);
+export const getMasterLocations = async (): Promise<MasterLocation[]> => {
+    try {
+        const querySnapshot = await getDocs(collection(db, COLLECTIONS.MASTER_LOCATIONS));
+        if (querySnapshot.empty) {
+            const batch = writeBatch(db);
+            DEFAULT_LOCATIONS.forEach(loc => {
+                const docRef = doc(collection(db, COLLECTIONS.MASTER_LOCATIONS));
+                batch.set(docRef, loc);
+            });
+            await batch.commit();
+            return DEFAULT_LOCATIONS;
+        }
+        return querySnapshot.docs.map(doc => doc.data() as MasterLocation);
+    } catch (e) {
+        return [];
+    }
 };
 
-export const findItemBySku = (sku: string): MasterItem | undefined => {
-  const items = getMasterData();
-  return items.find(i => i.sku === sku);
+export const getAuditLogs = async (): Promise<AuditRecord[]> => {
+  try {
+      // Order by timestamp desc
+      const q = query(collection(db, COLLECTIONS.AUDIT_LOGS), orderBy("timestamp", "desc"));
+      const querySnapshot = await getDocs(q);
+      return querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as AuditRecord));
+  } catch (e) {
+      console.error(e);
+      return [];
+  }
 };
 
-// --- LOCATION STATUS LOGIC ---
-
-export const getLocationStates = (): Record<string, LocationState> => {
-    const data = localStorage.getItem(STORAGE_KEYS.LOCATION_STATES);
-    return data ? JSON.parse(data) : {};
+export const saveAuditLog = async (record: AuditRecord) => {
+  try {
+      await addDoc(collection(db, COLLECTIONS.AUDIT_LOGS), record);
+      await updateLocationStatus(record.location, 'audited', { teamMember: record.teamMember });
+  } catch (e) {
+      console.error("Error saving log", e);
+  }
 };
 
-export const updateLocationStatus = (
+export const getLocationStates = async (): Promise<Record<string, LocationState>> => {
+    try {
+        const querySnapshot = await getDocs(collection(db, COLLECTIONS.LOCATION_STATES));
+        const states: Record<string, LocationState> = {};
+        querySnapshot.docs.forEach(doc => {
+            states[doc.id] = doc.data() as LocationState;
+        });
+        return states;
+    } catch (e) {
+        return {};
+    }
+};
+
+export const updateLocationStatus = async (
     locationName: string, 
     status: 'audited' | 'empty' | 'damaged',
     data?: { photoUrl?: string, description?: string, teamMember?: string }
 ) => {
-    const states = getLocationStates();
-    
-    states[locationName] = {
-        locationId: locationName,
-        status,
-        timestamp: Date.now(),
-        photoUrl: data?.photoUrl,
-        description: data?.description,
-        reportedBy: data?.teamMember
-    };
-    
-    localStorage.setItem(STORAGE_KEYS.LOCATION_STATES, JSON.stringify(states));
+    try {
+        const state: LocationState = {
+            locationId: locationName,
+            status,
+            timestamp: Date.now(),
+            photoUrl: data?.photoUrl,
+            description: data?.description,
+            reportedBy: data?.teamMember
+        };
+        // Use locationName as document ID for easy lookup/overwrite
+        await setDoc(doc(db, COLLECTIONS.LOCATION_STATES, locationName), state, { merge: true });
+    } catch (e) {
+        console.error("Error updating location", e);
+    }
 };

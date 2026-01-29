@@ -10,25 +10,36 @@ interface DamagedReportProps {
 export const DamagedReport: React.FC<DamagedReportProps> = ({ onNavigate }) => {
   const [damagedItems, setDamagedItems] = useState<(LocationState & { zone: string })[]>([]);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const locations = getMasterLocations();
-    const states = getLocationStates();
-    
-    // Combine state with static zone data
-    const list = Object.values(states)
-        .filter(s => s.status === 'damaged')
-        .map(s => {
-            const loc = locations.find(l => l.name === s.locationId);
-            return { ...s, zone: loc ? loc.zone : 'Unknown Zone' };
-        });
-    
-    setDamagedItems(list);
+    const fetch = async () => {
+        setLoading(true);
+        const [locations, states] = await Promise.all([
+            getMasterLocations(),
+            getLocationStates()
+        ]);
+        
+        const list = Object.values(states)
+            .filter(s => s.status === 'damaged')
+            .map(s => {
+                const loc = locations.find(l => l.name === s.locationId);
+                return { ...s, zone: loc ? loc.zone : 'Unknown Zone' };
+            });
+        
+        setDamagedItems(list);
+        setLoading(false);
+    };
+    fetch();
   }, []);
 
   const handlePrint = () => {
     window.print();
   };
+
+  if (loading) {
+      return <div className="p-8 text-center text-slate-500">Loading Report...</div>;
+  }
 
   return (
     <div className="bg-[#f6f6f8] text-slate-900 min-h-screen font-display flex flex-col print:bg-white">

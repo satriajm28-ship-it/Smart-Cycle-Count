@@ -1,21 +1,62 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { AppView } from './types';
 import { AuditForm } from './components/AuditForm';
 import { Dashboard } from './components/Dashboard';
 import { MasterData } from './components/MasterData';
 import { LocationChecklist } from './components/LocationChecklist';
 import { DamagedReport } from './components/DamagedReport';
+import { auth } from './services/firebaseConfig';
+import { onAuthStateChanged, signInAnonymously } from 'firebase/auth';
 
 const App: React.FC = () => {
   const [view, setView] = useState<AppView>(AppView.DASHBOARD);
   const [navParams, setNavParams] = useState<any>(null);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+
+  useEffect(() => {
+    let mounted = true;
+
+    // Listen for auth state changes
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        if (mounted) setIsAuthenticated(true);
+      } else {
+        // Attempt anonymous sign-in
+        signInAnonymously(auth)
+            .then(() => {
+                // Success is handled by the onAuthStateChanged listener
+            })
+            .catch((error) => {
+                console.warn("Authentication failed (App may work if rules are public):", error);
+                if (mounted) {
+                    // Treat as authenticated to unblock UI
+                    // This handles 'auth/configuration-not-found' by letting the app try to fetch data anyway
+                    setIsAuthenticated(true); 
+                }
+            });
+      }
+    });
+    return () => {
+        mounted = false;
+        unsubscribe();
+    };
+  }, []);
 
   // Navigation handler
   const navigate = (newView: AppView, params?: any) => {
     setNavParams(params);
     setView(newView);
   };
+
+  if (!isAuthenticated) {
+    return (
+        <div className="flex flex-col items-center justify-center min-h-screen bg-[#f6f6f8] text-slate-500 gap-3">
+            <span className="material-symbols-outlined animate-spin text-4xl text-primary">security</span>
+            <p className="font-medium animate-pulse">Authenticating...</p>
+        </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#f6f6f8]">

@@ -9,9 +9,16 @@ export const MasterData: React.FC = () => {
   const [items, setItems] = useState<MasterItem[]>([]);
   const [activeTab, setActiveTab] = useState<'excel' | 'sheets'>('sheets');
   const [pasteContent, setPasteContent] = useState('');
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    setItems(getMasterData());
+    const fetch = async () => {
+        setLoading(true);
+        const data = await getMasterData();
+        setItems(data);
+        setLoading(false);
+    };
+    fetch();
   }, []);
 
   // --- EXCEL HANDLERS ---
@@ -45,7 +52,6 @@ export const MasterData: React.FC = () => {
 
   // --- GOOGLE SHEETS (CLIPBOARD) HANDLERS ---
   const handleCopyToClipboard = () => {
-    // Convert to TSV (Tab Separated Values) which Google Sheets pastes perfectly
     const headers = ['sku', 'name', 'systemStock', 'batchNumber', 'expiryDate', 'category', 'unit'];
     const tsvContent = [
       headers.join('\t'),
@@ -68,7 +74,6 @@ export const MasterData: React.FC = () => {
   const handlePasteProcessing = () => {
     if (!pasteContent.trim()) return;
 
-    // Parse TSV
     const rows = pasteContent.split('\n').map(row => row.split('\t'));
     if (rows.length < 2) {
         alert("Invalid data format. Please copy the headers and data rows from Google Sheets.");
@@ -91,7 +96,7 @@ export const MasterData: React.FC = () => {
   };
 
   // --- COMMON IMPORT LOGIC ---
-  const processImportedData = (jsonData: any[], source: string) => {
+  const processImportedData = async (jsonData: any[], source: string) => {
     const newItems: MasterItem[] = jsonData.map((row) => ({
         sku: row.sku || row.SKU ? String(row.sku || row.SKU).trim() : '',
         name: row.name || row.Name || '',
@@ -107,10 +112,23 @@ export const MasterData: React.FC = () => {
         return;
     }
 
-    saveMasterData(newItems);
-    setItems(newItems);
+    setLoading(true);
+    await saveMasterData(newItems);
+    // Refresh
+    const refreshedData = await getMasterData();
+    setItems(refreshedData);
+    setLoading(false);
+    
     alert(`Successfully synced ${newItems.length} items from ${source}.`);
   };
+
+  if (loading) {
+      return (
+          <div className="flex items-center justify-center h-64">
+              <span className="material-symbols-outlined animate-spin text-3xl text-slate-400">sync</span>
+          </div>
+      );
+  }
 
   return (
     <div className="bg-white rounded-xl shadow-lg max-w-5xl mx-auto animate-fade-in overflow-hidden">

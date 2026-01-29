@@ -11,6 +11,7 @@ export const LocationChecklist: React.FC<LocationChecklistProps> = ({ onNavigate
   const [locations, setLocations] = useState<MasterLocation[]>([]);
   const [locationStates, setLocationStates] = useState<Record<string, any>>({});
   const [activeTab, setActiveTab] = useState<'pending' | 'completed'>('pending');
+  const [loading, setLoading] = useState(true);
 
   // Damage Reporting State
   const [isDamageModalOpen, setIsDamageModalOpen] = useState(false);
@@ -19,9 +20,15 @@ export const LocationChecklist: React.FC<LocationChecklistProps> = ({ onNavigate
   const [damagePhoto, setDamagePhoto] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const refreshData = () => {
-      setLocations(getMasterLocations());
-      setLocationStates(getLocationStates());
+  const refreshData = async () => {
+      setLoading(true);
+      const [locs, states] = await Promise.all([
+          getMasterLocations(),
+          getLocationStates()
+      ]);
+      setLocations(locs);
+      setLocationStates(states);
+      setLoading(false);
   };
 
   useEffect(() => {
@@ -43,9 +50,9 @@ export const LocationChecklist: React.FC<LocationChecklistProps> = ({ onNavigate
       onNavigate(AppView.FORM, { initialLocation: locationName });
   };
 
-  const handleMarkEmpty = (locationName: string) => {
+  const handleMarkEmpty = async (locationName: string) => {
     if (confirm(`Mark ${locationName} as Empty?`)) {
-        updateLocationStatus(locationName, 'empty');
+        await updateLocationStatus(locationName, 'empty');
         refreshData();
     }
   };
@@ -68,7 +75,7 @@ export const LocationChecklist: React.FC<LocationChecklistProps> = ({ onNavigate
       }
   };
 
-  const submitDamageReport = () => {
+  const submitDamageReport = async () => {
       if (!selectedLocation) return;
       if (!damageDescription) {
           alert("Please provide a description of the damage.");
@@ -78,15 +85,24 @@ export const LocationChecklist: React.FC<LocationChecklistProps> = ({ onNavigate
           if (!confirm("No photo evidence provided. Submit anyway?")) return;
       }
 
-      updateLocationStatus(selectedLocation, 'damaged', {
+      await updateLocationStatus(selectedLocation, 'damaged', {
           photoUrl: damagePhoto || undefined,
           description: damageDescription,
-          teamMember: 'Current Team' // Ideally dynamic
+          teamMember: 'Current Team' 
       });
       
       setIsDamageModalOpen(false);
       refreshData();
   };
+
+  if (loading) {
+      return (
+          <div className="flex flex-col items-center justify-center min-h-screen text-slate-500 gap-3">
+              <span className="material-symbols-outlined animate-spin text-4xl">sync</span>
+              <p>Loading locations...</p>
+          </div>
+      );
+  }
 
   return (
     <div className="bg-[#f6f6f8] text-slate-900 min-h-screen pb-24 font-display flex flex-col relative">
