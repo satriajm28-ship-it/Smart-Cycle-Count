@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0" />
+    <title>Smart Stock Opname</title>
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <script>
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#135bec",
+                        "danger": "#ef4444",
+                        "background-light": "#f6f6f8",
+                        "background-dark": "#101622",
+                    },
+                    fontFamily: {
+                        "display": ["Inter", "sans-serif"]
+                    },
+                    borderRadius: {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "2xl": "1rem",
+                        "full": "9999px"
+                    },
+                },
+            },
+        }
+    </script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+    <style>
+      body { font-family: 'Inter', sans-serif; background-color: #f6f6f8; }
+      .no-scrollbar::-webkit-scrollbar { display: none; }
+      .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+      /* Safe area padding for iPhones without home button */
+      .safe-area-pb { padding-bottom: env(safe-area-inset-bottom, 20px); }
+      
+      /* Custom Date Picker Icon */
+      input[type="date"]::-webkit-calendar-picker-indicator {
+        background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuBfrk9E7jCHRlkdfk9mKsYn1HXodBfgHudMgQLnlfHnM9wuA1S7BERAExlnlTn5g61M8V__m_eSwOc_ZmwpQ1Q7sU8gVllOAEMRn3gyRMMgZBvnOfcxGQfdOdl5lnYF-IKMoui4FQtpgm20QAU7getsfd6MuxeykDDmuLwNaTWnMxqi0aHs-bGcPy6n7RFXcIkU0L_gN3JwgtLcV6UKbhxvNl-um2D9AoSyU8pImgy620m77fir5-DeCIQSRIIyMwkYlpA8PZr5T_g');
+        cursor: pointer;
+      }
+    </style>
+    <script type="importmap">
+    {
+      "imports": {
+        "react/": "https://esm.sh/react@^19.2.4/",
+        "react": "https://esm.sh/react@^19.2.4",
+        "recharts": "https://esm.sh/recharts@^3.7.0",
+        "react-dom/": "https://esm.sh/react-dom@^19.2.4/",
+        "lucide-react": "https://esm.sh/lucide-react@^0.563.0",
+        "@google/genai": "https://esm.sh/@google/genai@^1.38.0",
+        "uuid": "https://esm.sh/uuid@^13.0.0",
+        "xlsx": "https://esm.sh/xlsx@0.18.5"
+      }
+    }
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+  </body>
+</html>
