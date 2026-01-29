@@ -30,6 +30,11 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState('');
 
+  // Filter & Sort State
+  const [filterStatus, setFilterStatus] = useState<'all' | 'matched' | 'shortage' | 'surplus'>('all');
+  const [sortKey, setSortKey] = useState<'sku' | 'name' | 'variance' | 'status'>('variance'); // Default to variance to show issues first
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc'); // Default asc for variance means negative (shortage) first
+
   useEffect(() => {
     const logs = getAuditLogs();
     const masterData = getMasterData();
@@ -105,11 +110,33 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
     setExpandedItems(newSet);
   };
 
-  // Filtering
-  const filteredGroups = groupedItems.filter(g => 
-    g.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-    g.sku.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  // Sorting and Filtering Logic
+  const filteredGroups = groupedItems
+    .filter(g => {
+        const matchesSearch = g.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                              g.sku.toLowerCase().includes(searchQuery.toLowerCase());
+        const matchesStatus = filterStatus === 'all' || g.status === filterStatus;
+        return matchesSearch && matchesStatus;
+    })
+    .sort((a, b) => {
+        let comparison = 0;
+        switch (sortKey) {
+            case 'sku':
+                comparison = a.sku.localeCompare(b.sku);
+                break;
+            case 'name':
+                comparison = a.name.localeCompare(b.name);
+                break;
+            case 'variance':
+                comparison = a.variance - b.variance;
+                break;
+            case 'status':
+                const statusPriority = { shortage: 0, surplus: 1, matched: 2 };
+                comparison = statusPriority[a.status] - statusPriority[b.status];
+                break;
+        }
+        return sortOrder === 'asc' ? comparison : -comparison;
+    });
 
   const filteredPending = pendingItems.filter(p => 
     p.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
@@ -243,9 +270,68 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
         {/* --- AUDITED ITEMS LIST --- */}
         {activeTab === 'audited' && (
             <>
+                {/* Filter & Sort Controls */}
+                <div className="flex flex-col gap-2 mb-2">
+                    {/* Status Filter Chips */}
+                    <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
+                        {(['all', 'shortage', 'surplus', 'matched'] as const).map(status => {
+                            let activeClass = 'bg-slate-800 text-white border-slate-800';
+                            // Custom active colors per status for better UX
+                            if (filterStatus === status) {
+                                if (status === 'shortage') activeClass = 'bg-red-600 text-white border-red-600';
+                                else if (status === 'surplus') activeClass = 'bg-blue-600 text-white border-blue-600';
+                                else if (status === 'matched') activeClass = 'bg-green-600 text-white border-green-600';
+                            }
+                            
+                            return (
+                                <button
+                                    key={status}
+                                    onClick={() => setFilterStatus(status)}
+                                    className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wide whitespace-nowrap border transition-colors ${
+                                        filterStatus === status 
+                                            ? activeClass
+                                            : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300'
+                                    }`}
+                                >
+                                    {status === 'all' ? 'All Items' : status}
+                                </button>
+                            );
+                        })}
+                    </div>
+
+                    {/* Sort Controls */}
+                    <div className="flex justify-between items-center bg-white px-3 py-2 rounded-lg border border-slate-200">
+                        <span className="text-xs font-bold text-slate-400 uppercase flex items-center gap-1">
+                            <span className="material-symbols-outlined text-[16px]">sort</span>
+                            Sort By
+                        </span>
+                        <div className="flex items-center gap-3">
+                            <select 
+                                value={sortKey}
+                                onChange={(e) => setSortKey(e.target.value as any)}
+                                className="text-xs font-bold text-slate-700 bg-transparent border-none p-0 focus:ring-0 cursor-pointer text-right"
+                            >
+                                <option value="variance">Variance</option>
+                                <option value="name">Name</option>
+                                <option value="sku">SKU</option>
+                                <option value="status">Status</option>
+                            </select>
+                            <div className="w-px h-4 bg-slate-200"></div>
+                            <button 
+                                onClick={() => setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc')}
+                                className="flex items-center justify-center w-6 h-6 rounded hover:bg-slate-100 text-slate-500 transition-colors"
+                            >
+                                <span className="material-symbols-outlined text-[18px]">
+                                    {sortOrder === 'asc' ? 'arrow_upward' : 'arrow_downward'}
+                                </span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
                 {filteredGroups.length === 0 ? (
                     <div className="text-center py-12 bg-white rounded-xl border border-slate-100 text-slate-400">
-                        No audited items found. Start scanning!
+                        {filterStatus !== 'all' || searchQuery ? 'No items match your filters.' : 'No audited items found. Start scanning!'}
                     </div>
                 ) : (
                     filteredGroups.map(group => {
