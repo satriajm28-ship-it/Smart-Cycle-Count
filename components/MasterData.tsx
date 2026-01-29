@@ -2,14 +2,18 @@
 import React, { useState, useEffect } from 'react';
 import { MasterItem } from '../types';
 import { getMasterData, saveMasterData } from '../services/storageService';
-import { Download, Upload, FileSpreadsheet, Copy, Clipboard, Check, Sheet } from 'lucide-react';
+import { Download, Upload, FileSpreadsheet, Link as LinkIcon, Check, Sheet, ArrowRight, RefreshCw, Trash2 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
 export const MasterData: React.FC = () => {
   const [items, setItems] = useState<MasterItem[]>([]);
   const [activeTab, setActiveTab] = useState<'excel' | 'sheets'>('sheets');
-  const [pasteContent, setPasteContent] = useState('');
+  
+  const [sheetUrl, setSheetUrl] = useState('');
+  
+  const [previewItems, setPreviewItems] = useState<MasterItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isFetchingSheet, setIsFetchingSheet] = useState(false);
 
   useEffect(() => {
     const fetch = async () => {
@@ -21,12 +25,71 @@ export const MasterData: React.FC = () => {
     fetch();
   }, []);
 
+  // --- SMART MAPPING LOGIC FOR NEW HEADERS ---
+  const normalizeHeader = (header: string): string | null => {
+      const h = header.toLowerCase().replace(/[^a-z0-9]/g, '');
+      
+      // 1. Kode barang
+      if (['kodebarang', 'kode', 'sku', 'itemcode', 'partnumber'].includes(h)) return 'sku';
+      
+      // 2. Nama Barang
+      if (['namabarang', 'nama', 'name', 'description'].includes(h)) return 'name';
+      
+      // 3. Nama Satuan Barang & Jasa
+      if (['namasatuanbarangjasa', 'namasatuan', 'satuan', 'unit', 'uom'].includes(h)) return 'unit';
+      
+      // 4. Nama Gudang ( Warehouse) -> Mapped to 'category' or 'location' context in MasterItem
+      // We reuse 'category' field in MasterItem types to store the Default Warehouse Name
+      if (['namagudang', 'warehouse', 'gudang', 'lokasi', 'namagudangwarehouse'].includes(h)) return 'category';
+      
+      // 5. No Seri/Produksi
+      if (['noseriproduksi', 'noseri', 'noproduksi', 'serial', 'batch', 'batchnumber', 'lot'].includes(h)) return 'batchNumber';
+      
+      // 6. Tgl Kadaluarsa
+      if (['tglkadaluarsa', 'tgl', 'kadaluarsa', 'expired', 'expirydate', 'ed'].includes(h)) return 'expiryDate';
+      
+      // 7. Kuantitas (Total Sistem)
+      if (['kuantitas', 'qty', 'quantity', 'stok', 'stock', 'systemstock', 'jumlah'].includes(h)) return 'systemStock';
+
+      return null;
+  };
+
+  const formatDate = (raw: any): string => {
+      if (!raw) return '';
+      // Try to handle Excel serial date
+      if (typeof raw === 'number' && raw > 20000) {
+          const date = new Date(Math.round((raw - 25569) * 86400 * 1000));
+          return date.toISOString().split('T')[0];
+      }
+      const str = String(raw).trim();
+      // YYYY-MM-DD
+      if (str.match(/^\d{4}-\d{2}-\d{2}$/)) return str;
+      // DD/MM/YYYY or DD-MM-YYYY -> YYYY-MM-DD
+      if (str.match(/^\d{1,2}[/-]\d{1,2}[/-]\d{4}$/)) {
+          const parts = str.split(/[/-]/);
+          // Assuming DD-MM-YYYY
+          return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+      }
+      return str;
+  };
+
   // --- EXCEL HANDLERS ---
   const handleExportExcel = () => {
-    const ws = XLSX.utils.json_to_sheet(items);
+    // Export format strictly as requested
+    const exportData = items.map(item => ({
+        "Kode barang": item.sku,
+        "Nama Barang": item.name,
+        "Nama Satuan Barang & Jasa": item.unit,
+        "Nama Gudang ( Warehouse)": item.category,
+        "No Seri/Produksi": item.batchNumber,
+        "Tgl Kadaluarsa": item.expiryDate,
+        "Kuantitas": item.systemStock
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(exportData);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "MasterData");
-    XLSX.writeFile(wb, `master_data_${new Date().toISOString().split('T')[0]}.xlsx`);
+    XLSX.writeFile(wb, `master_data_template.xlsx`);
   };
 
   const handleImportExcel = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -42,7 +105,7 @@ export const MasterData: React.FC = () => {
         const sheetName = workbook.SheetNames[0];
         const sheet = workbook.Sheets[sheetName];
         const jsonData = XLSX.utils.sheet_to_json<any>(sheet);
-        processImportedData(jsonData, 'Excel');
+        processToPreview(jsonData);
       } catch (err) {
         alert('Error parsing Excel file.');
       }
@@ -50,233 +113,244 @@ export const MasterData: React.FC = () => {
     reader.readAsArrayBuffer(file);
   };
 
-  // --- GOOGLE SHEETS (CLIPBOARD) HANDLERS ---
-  const handleCopyToClipboard = () => {
-    const headers = ['sku', 'name', 'systemStock', 'batchNumber', 'expiryDate', 'category', 'unit'];
-    const tsvContent = [
-      headers.join('\t'),
-      ...items.map(item => [
-        item.sku,
-        item.name,
-        item.systemStock,
-        item.batchNumber,
-        item.expiryDate,
-        item.category,
-        item.unit
-      ].join('\t'))
-    ].join('\n');
+  // --- GOOGLE SHEETS URL HANDLER ---
+  const fetchGoogleSheet = async () => {
+      if (!sheetUrl) return;
+      const matches = sheetUrl.match(/\/d\/([a-zA-Z0-9-_]+)/);
+      if (!matches || !matches[1]) {
+          alert("Invalid Google Sheets URL.");
+          return;
+      }
+      
+      const sheetId = matches[1];
+      const csvUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv`;
 
-    navigator.clipboard.writeText(tsvContent).then(() => {
-      alert("Data Copied! Open Google Sheets and Paste (Ctrl+V) into cell A1.");
-    });
-  };
-
-  const handlePasteProcessing = () => {
-    if (!pasteContent.trim()) return;
-
-    const rows = pasteContent.split('\n').map(row => row.split('\t'));
-    if (rows.length < 2) {
-        alert("Invalid data format. Please copy the headers and data rows from Google Sheets.");
-        return;
-    }
-
-    const headers = rows[0].map(h => h.trim().toLowerCase());
-    const dataRows = rows.slice(1);
-
-    const jsonData = dataRows.map(row => {
-        const obj: any = {};
-        headers.forEach((header, index) => {
-            if (row[index] !== undefined) obj[header] = row[index];
-        });
-        return obj;
-    });
-
-    processImportedData(jsonData, 'Google Sheets Paste');
-    setPasteContent('');
+      setIsFetchingSheet(true);
+      try {
+          const response = await fetch(csvUrl);
+          if (!response.ok) throw new Error("Failed to fetch");
+          const csvText = await response.text();
+          const workbook = XLSX.read(csvText, { type: 'string' });
+          const sheetName = workbook.SheetNames[0];
+          const sheet = workbook.Sheets[sheetName];
+          const jsonData = XLSX.utils.sheet_to_json<any>(sheet);
+          processToPreview(jsonData);
+      } catch (error) {
+          alert("Gagal mengambil data. Pastikan link Google Sheet benar dan akses 'Anyone with link' aktif.");
+      } finally {
+          setIsFetchingSheet(false);
+      }
   };
 
   // --- COMMON IMPORT LOGIC ---
-  const processImportedData = async (jsonData: any[], source: string) => {
-    const newItems: MasterItem[] = jsonData.map((row) => ({
-        sku: row.sku || row.SKU ? String(row.sku || row.SKU).trim() : '',
-        name: row.name || row.Name || '',
-        systemStock: Number(row.systemStock || row.SystemStock || 0),
-        batchNumber: row.batchNumber || row.BatchNumber ? String(row.batchNumber || row.BatchNumber).trim() : '',
-        expiryDate: row.expiryDate || row.ExpiryDate ? String(row.expiryDate || row.ExpiryDate).trim() : '',
-        category: row.category || row.Category || 'General',
-        unit: row.unit || row.Unit || 'Pcs'
-    })).filter(item => item.sku !== '');
+  const processToPreview = (jsonData: any[]) => {
+    if (jsonData.length === 0) return;
 
-    if (newItems.length === 0) {
-        alert("No valid data found. Check your headers (sku, name, systemStock, etc).");
-        return;
-    }
-
-    setLoading(true);
-    await saveMasterData(newItems);
-    // Refresh
-    const refreshedData = await getMasterData();
-    setItems(refreshedData);
-    setLoading(false);
+    const rawHeaders = Object.keys(jsonData[0]);
+    const headerMap: Record<string, string | null> = {};
     
-    alert(`Successfully synced ${newItems.length} items from ${source}.`);
+    rawHeaders.forEach(h => {
+        headerMap[h] = normalizeHeader(h);
+    });
+
+    const parsedItems: MasterItem[] = jsonData.map((row) => {
+        const item: any = {
+            sku: '', name: '', systemStock: 0, batchNumber: '-', expiryDate: '-', category: 'General', unit: 'Pcs'
+        };
+
+        Object.keys(row).forEach(key => {
+            const fieldType = headerMap[key];
+            let value = row[key];
+            if (!value) return;
+
+            if (fieldType === 'sku') item.sku = String(value).trim();
+            if (fieldType === 'name') item.name = String(value).trim();
+            if (fieldType === 'unit') item.unit = String(value).trim();
+            if (fieldType === 'category') item.category = String(value).trim();
+            if (fieldType === 'batchNumber') item.batchNumber = String(value).trim();
+            
+            if (fieldType === 'systemStock') {
+                if (typeof value === 'string') value = parseFloat(value.replace(/,/g, '').replace(/\./g, '').trim()) || 0;
+                else value = Number(value) || 0;
+                item.systemStock = value;
+            }
+
+            if (fieldType === 'expiryDate') {
+                item.expiryDate = formatDate(value);
+            }
+        });
+
+        return item;
+    }).filter(item => item.sku && String(item.sku).trim() !== '');
+
+    setPreviewItems(parsedItems);
   };
 
-  if (loading) {
-      return (
-          <div className="flex items-center justify-center h-64">
-              <span className="material-symbols-outlined animate-spin text-3xl text-slate-400">sync</span>
-          </div>
-      );
-  }
+  const confirmImport = async () => {
+      if (previewItems.length === 0) return;
+      setLoading(true);
+      await saveMasterData(previewItems);
+      const refreshedData = await getMasterData();
+      setItems(refreshedData);
+      setLoading(false);
+      setSheetUrl('');
+      setPreviewItems([]);
+      alert(`Berhasil sinkronisasi ${previewItems.length} barang!`);
+  };
+
+  if (loading) return <div className="flex h-64 items-center justify-center"><span className="material-symbols-outlined animate-spin text-3xl text-slate-400">sync</span></div>;
 
   return (
-    <div className="bg-white rounded-xl shadow-lg max-w-5xl mx-auto animate-fade-in overflow-hidden">
+    <div className="bg-white rounded-xl shadow-lg max-w-6xl mx-auto animate-fade-in overflow-hidden">
       <div className="p-6 bg-slate-900 text-white flex justify-between items-center">
         <div>
           <h2 className="text-2xl font-bold flex items-center gap-2">
             <FileSpreadsheet className="text-green-400" />
             Master Data & Sync
           </h2>
-          <p className="text-slate-400 text-sm mt-1">Manage inventory items via Excel or Google Sheets</p>
+          <p className="text-slate-400 text-xs mt-1 font-mono">
+            Format: Kode barang | Nama Barang | Nama Satuan | Nama Gudang | No Seri/Produksi | Tgl Kadaluarsa | Kuantitas
+          </p>
         </div>
       </div>
 
-      {/* Tabs */}
       <div className="flex border-b border-gray-200">
-        <button 
-          onClick={() => setActiveTab('sheets')}
-          className={`flex-1 py-4 text-sm font-medium text-center transition-colors flex items-center justify-center gap-2 ${activeTab === 'sheets' ? 'text-green-600 border-b-2 border-green-600 bg-green-50/50' : 'text-gray-500 hover:text-gray-700'}`}
-        >
-          <Sheet size={18} />
-          Google Sheets Sync
+        <button onClick={() => { setActiveTab('sheets'); setPreviewItems([]); }} className={`flex-1 py-4 text-sm font-medium flex justify-center gap-2 ${activeTab === 'sheets' ? 'text-green-600 border-b-2 border-green-600 bg-green-50/50' : 'text-gray-500'}`}>
+          <Sheet size={18} /> Google Sheets Link
         </button>
-        <button 
-          onClick={() => setActiveTab('excel')}
-          className={`flex-1 py-4 text-sm font-medium text-center transition-colors flex items-center justify-center gap-2 ${activeTab === 'excel' ? 'text-blue-600 border-b-2 border-blue-600 bg-blue-50/50' : 'text-gray-500 hover:text-gray-700'}`}
-        >
-          <FileSpreadsheet size={18} />
-          Excel File Import/Export
+        <button onClick={() => { setActiveTab('excel'); setPreviewItems([]); }} className={`flex-1 py-4 text-sm font-medium flex justify-center gap-2 ${activeTab === 'excel' ? 'text-blue-600 border-b-2 border-blue-600 bg-blue-50/50' : 'text-gray-500'}`}>
+          <FileSpreadsheet size={18} /> Excel Import
         </button>
       </div>
 
       <div className="p-6">
-        {activeTab === 'sheets' && (
-            <div className="space-y-8">
-                {/* Export Section */}
-                <div className="bg-green-50 rounded-xl p-6 border border-green-100">
-                    <h3 className="text-lg font-bold text-green-800 mb-2 flex items-center gap-2">
-                        <Upload className="rotate-180" size={20} />
-                        Export to Google Sheets
-                    </h3>
-                    <p className="text-sm text-green-700 mb-4">
-                        Click the button below to copy all data. Then open your Google Sheet and paste (Ctrl+V).
-                    </p>
-                    <button 
-                        onClick={handleCopyToClipboard}
-                        className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white px-5 py-3 rounded-lg font-medium transition shadow-md active:scale-95"
-                    >
-                        <Copy size={18} />
-                        Copy All Data to Clipboard
-                    </button>
+        {previewItems.length > 0 ? (
+            <div className="animate-fade-in space-y-4">
+                <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 flex justify-between items-center">
+                    <div className="flex items-center gap-3">
+                        <Check className="text-blue-600" />
+                        <div>
+                            <h3 className="font-bold text-blue-900">{previewItems.length} Data Siap Diimpor</h3>
+                            <p className="text-xs text-blue-700">Silakan periksa tabel di bawah sebelum konfirmasi.</p>
+                        </div>
+                    </div>
+                    <div className="flex gap-3">
+                        <button onClick={() => setPreviewItems([])} className="px-4 py-2 text-slate-600 font-medium hover:bg-slate-200 rounded-lg">Batal</button>
+                        <button onClick={confirmImport} className="px-4 py-2 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-700 flex items-center gap-2">
+                            Konfirmasi Sync <ArrowRight size={16} />
+                        </button>
+                    </div>
                 </div>
-
-                {/* Import Section */}
-                <div className="bg-slate-50 rounded-xl p-6 border border-slate-200">
-                    <h3 className="text-lg font-bold text-slate-800 mb-2 flex items-center gap-2">
-                        <Clipboard size={20} />
-                        Import from Google Sheets
-                    </h3>
-                    <p className="text-sm text-slate-600 mb-4">
-                        1. Select your headers and data in Google Sheets.<br/>
-                        2. Copy (Ctrl+C).<br/>
-                        3. Paste into the box below.
-                    </p>
-                    <textarea 
-                        className="w-full h-32 p-3 border border-slate-300 rounded-lg font-mono text-xs focus:ring-2 focus:ring-green-500 focus:border-green-500 mb-3"
-                        placeholder={`sku\tname\tsystemStock\tbatchNumber...\nBRG-01\tItem A\t100\tBATCH-01...`}
-                        value={pasteContent}
-                        onChange={(e) => setPasteContent(e.target.value)}
-                    />
-                    <button 
-                        onClick={handlePasteProcessing}
-                        disabled={!pasteContent}
-                        className="flex items-center gap-2 bg-slate-800 hover:bg-slate-900 text-white px-5 py-3 rounded-lg font-medium transition shadow-md active:scale-95 disabled:opacity-50"
-                    >
-                        <Check size={18} />
-                        Process & Save Data
-                    </button>
+                <div className="overflow-x-auto border border-slate-200 rounded-lg max-h-[400px]">
+                    <table className="min-w-full divide-y divide-gray-200">
+                        <thead className="bg-slate-50 sticky top-0 z-10">
+                            <tr>
+                                <th className="px-4 py-2 text-left text-xs font-bold uppercase text-slate-600 whitespace-nowrap">Kode barang</th>
+                                <th className="px-4 py-2 text-left text-xs font-bold uppercase text-slate-600 whitespace-nowrap">Nama Barang</th>
+                                <th className="px-4 py-2 text-left text-xs font-bold uppercase text-slate-600 whitespace-nowrap">Nama Satuan</th>
+                                <th className="px-4 py-2 text-left text-xs font-bold uppercase text-slate-600 whitespace-nowrap">Nama Gudang</th>
+                                <th className="px-4 py-2 text-left text-xs font-bold uppercase text-slate-600 whitespace-nowrap">No Seri/Produksi</th>
+                                <th className="px-4 py-2 text-left text-xs font-bold uppercase text-slate-600 whitespace-nowrap">Tgl Kadaluarsa</th>
+                                <th className="px-4 py-2 text-left text-xs font-bold uppercase text-slate-600 whitespace-nowrap">Kuantitas</th>
+                            </tr>
+                        </thead>
+                        <tbody className="bg-white divide-y divide-gray-200">
+                            {previewItems.map((item, idx) => (
+                                <tr key={idx} className="hover:bg-slate-50">
+                                    <td className="px-4 py-2 text-xs font-mono font-medium">{item.sku}</td>
+                                    <td className="px-4 py-2 text-xs">{item.name}</td>
+                                    <td className="px-4 py-2 text-xs">{item.unit}</td>
+                                    <td className="px-4 py-2 text-xs">{item.category}</td>
+                                    <td className="px-4 py-2 text-xs font-mono">{item.batchNumber}</td>
+                                    <td className="px-4 py-2 text-xs font-mono">{item.expiryDate}</td>
+                                    <td className="px-4 py-2 text-xs font-bold text-center">{item.systemStock}</td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
                 </div>
             </div>
-        )}
-
-        {activeTab === 'excel' && (
-            <div className="grid md:grid-cols-2 gap-6">
-                <div className="border border-gray-200 rounded-xl p-6 flex flex-col items-center justify-center text-center hover:bg-gray-50 transition">
-                    <div className="w-12 h-12 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mb-4">
-                        <Download size={24} />
+        ) : (
+            <>
+                {activeTab === 'sheets' && (
+                    <div className="space-y-6">
+                        <div className="bg-slate-50 rounded-xl p-6 border border-slate-200">
+                            <h3 className="text-lg font-bold text-slate-800 mb-2 flex items-center gap-2"><LinkIcon size={20} /> Import via Link</h3>
+                            <div className="flex gap-2">
+                                <input type="url" className="flex-1 p-3 border rounded-lg text-sm" placeholder="https://docs.google.com/spreadsheets/d/..." value={sheetUrl} onChange={(e) => setSheetUrl(e.target.value)} />
+                                <button onClick={fetchGoogleSheet} disabled={!sheetUrl || isFetchingSheet} className="bg-green-600 text-white px-6 rounded-lg font-bold flex items-center gap-2 hover:bg-green-700 disabled:opacity-50">
+                                    {isFetchingSheet ? <RefreshCw className="animate-spin" /> : <ArrowRight />} Fetch
+                                </button>
+                            </div>
+                            <p className="text-xs text-slate-500 mt-2">Pastikan Google Sheet di-set ke <b>"Anyone with the link"</b>.</p>
+                        </div>
+                        <div className="bg-green-50 rounded-xl p-6 border border-green-100 flex justify-between items-center">
+                            <div>
+                                <h3 className="text-lg font-bold text-green-800">Download Template</h3>
+                                <p className="text-xs text-green-700">Unduh template Excel dengan format header yang benar.</p>
+                            </div>
+                            <button onClick={handleExportExcel} className="bg-green-600 text-white px-5 py-3 rounded-lg font-medium flex items-center gap-2 hover:bg-green-700"><Download size={18} /> Download .xlsx</button>
+                        </div>
                     </div>
-                    <h3 className="font-bold text-gray-800 mb-2">Download Excel</h3>
-                    <p className="text-sm text-gray-500 mb-4">Get the full master data in .xlsx format</p>
-                    <button 
-                        onClick={handleExportExcel}
-                        className="text-blue-600 font-medium hover:underline"
-                    >
-                        Download File
-                    </button>
-                </div>
-
-                <div className="border border-dashed border-gray-300 rounded-xl p-6 flex flex-col items-center justify-center text-center hover:bg-gray-50 transition relative">
-                    <div className="w-12 h-12 bg-green-100 text-green-600 rounded-full flex items-center justify-center mb-4">
-                        <Upload size={24} />
+                )}
+                {activeTab === 'excel' && (
+                    <div className="grid md:grid-cols-2 gap-6">
+                        <div className="border border-gray-200 rounded-xl p-6 flex flex-col items-center justify-center hover:bg-gray-50 text-center">
+                            <Download size={32} className="text-blue-600 mb-4" />
+                            <h3 className="font-bold mb-2">Download Template</h3>
+                            <p className="text-xs text-slate-500 mb-4">Gunakan template ini agar format sesuai.</p>
+                            <button onClick={handleExportExcel} className="text-blue-600 font-bold hover:underline">Download .xlsx</button>
+                        </div>
+                        <div className="border-2 border-dashed border-gray-300 rounded-xl p-6 flex flex-col items-center justify-center relative hover:bg-gray-50 text-center">
+                            <Upload size={32} className="text-green-600 mb-4" />
+                            <h3 className="font-bold mb-2">Upload Excel</h3>
+                            <p className="text-xs text-slate-500">Drag & drop atau klik untuk upload</p>
+                            <input type="file" accept=".xlsx, .xls" onChange={handleImportExcel} className="absolute inset-0 opacity-0 cursor-pointer" />
+                        </div>
                     </div>
-                    <h3 className="font-bold text-gray-800 mb-2">Upload Excel</h3>
-                    <p className="text-sm text-gray-500 mb-4">Drag & drop or click to upload .xlsx</p>
-                    <input 
-                        type="file" 
-                        accept=".xlsx, .xls"
-                        onChange={handleImportExcel}
-                        className="absolute inset-0 opacity-0 cursor-pointer"
-                    />
-                </div>
-            </div>
+                )}
+            </>
         )}
       </div>
-      
-      {/* Table Preview */}
-      <div className="border-t border-gray-200">
-        <div className="px-6 py-4 bg-gray-50 border-b border-gray-200">
-            <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider">Current System Data ({items.length} items)</h3>
-        </div>
-        <div className="overflow-x-auto max-h-[400px]">
-            <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50 sticky top-0">
-                <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">SKU</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">System Stock</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Batch</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Expired Date</th>
-                </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-                {items.length === 0 ? (
-                    <tr>
-                        <td colSpan={5} className="text-center py-4 text-gray-400 italic">No data available.</td>
-                    </tr>
-                ) : items.slice(0, 50).map((item) => (
-                <tr key={item.sku} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{item.sku}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{item.name}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-bold">{item.systemStock}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 font-mono">{item.batchNumber}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 font-mono">{item.expiryDate}</td>
-                </tr>
-                ))}
-            </tbody>
-            </table>
-        </div>
-      </div>
+
+      {/* Existing Data Table (Read Only View) */}
+      {previewItems.length === 0 && (
+          <div className="border-t border-gray-200">
+              <div className="px-6 py-4 bg-gray-50 flex justify-between items-center">
+                  <h3 className="text-sm font-bold text-gray-600 uppercase">Database Saat Ini ({items.length} items)</h3>
+              </div>
+              <div className="overflow-x-auto max-h-[500px]">
+                  <table className="min-w-full divide-y divide-gray-200">
+                      <thead className="bg-gray-100 sticky top-0">
+                          <tr>
+                              <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Kode barang</th>
+                              <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Nama Barang</th>
+                              <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Satuan</th>
+                              <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Gudang</th>
+                              <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">No Seri</th>
+                              <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Tgl Kadaluarsa</th>
+                              <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Kuantitas</th>
+                          </tr>
+                      </thead>
+                      <tbody className="bg-white divide-y divide-gray-200">
+                          {items.length === 0 ? (
+                              <tr><td colSpan={7} className="text-center py-8 text-gray-400">Belum ada data master.</td></tr>
+                          ) : items.slice(0, 100).map((item) => (
+                              <tr key={item.sku} className="hover:bg-gray-50">
+                                  <td className="px-6 py-4 whitespace-nowrap text-xs font-mono font-medium">{item.sku}</td>
+                                  <td className="px-6 py-4 whitespace-nowrap text-xs text-gray-600">{item.name}</td>
+                                  <td className="px-6 py-4 whitespace-nowrap text-xs text-gray-500">{item.unit}</td>
+                                  <td className="px-6 py-4 whitespace-nowrap text-xs text-gray-500">{item.category}</td>
+                                  <td className="px-6 py-4 whitespace-nowrap text-xs font-mono text-gray-500">{item.batchNumber}</td>
+                                  <td className="px-6 py-4 whitespace-nowrap text-xs font-mono text-gray-500">{item.expiryDate}</td>
+                                  <td className="px-6 py-4 whitespace-nowrap text-xs font-bold text-gray-900">{item.systemStock}</td>
+                              </tr>
+                          ))}
+                      </tbody>
+                  </table>
+              </div>
+          </div>
+      )}
     </div>
   );
 };

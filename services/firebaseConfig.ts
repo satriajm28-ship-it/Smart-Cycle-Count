@@ -1,11 +1,9 @@
+
 import { initializeApp } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
 import { getAuth } from "firebase/auth";
 
-// Access import.meta.env safely by casting to any to avoid TypeScript errors regarding missing 'env' property
-// We remove the vite/client reference to avoid errors if the type definition is missing.
-const env = (import.meta as any).env || {};
-
+// Define config directly to ensure it works in all environments
 const firebaseConfig = {
    apiKey: "AIzaSyAW85HLoKFugnzSDjk4v_Sb6NZI2BzbjP4",
   authDomain: "smart-cycle-count.firebaseapp.com",

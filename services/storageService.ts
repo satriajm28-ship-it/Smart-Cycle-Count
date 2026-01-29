@@ -29,9 +29,10 @@ const LOCAL_KEYS = {
 // Seed data
 const DEFAULT_MASTER_DATA: MasterItem[] = [
   { sku: 'BRG-882910', name: 'Indomie Goreng Special 85g', systemStock: 50, batchNumber: 'BATCH-2023-X', expiryDate: '2024-12-12', category: 'Food', unit: 'Pcs' },
-  { sku: '123BX', name: 'Example Test Item', systemStock: 200, batchNumber: 'DEFAULT-BATCH', expiryDate: '2025-01-01', category: 'General', unit: 'Pcs' },
+  { sku: '123BX', name: 'Example Test Item', systemStock: 200, batchNumber: 'DEFAULT-BATCH', expiryDate: '2025-01-01', category: 'General', unit: 'Carton' },
   { sku: '89999090901', name: 'Paracetamol 500mg', systemStock: 100, batchNumber: 'B202301', expiryDate: '2025-12-31', category: 'Medicine', unit: 'Box' },
   { sku: '89999090902', name: 'Amoxicillin Syrup', systemStock: 50, batchNumber: 'B202305', expiryDate: '2024-06-30', category: 'Medicine', unit: 'Bottle' },
+  { sku: 'CABLE-001', name: 'USB-C Cable 1M', systemStock: 25, batchNumber: 'LOT-99', expiryDate: '2030-01-01', category: 'Electronics', unit: 'Pcs' },
 ];
 
 const DEFAULT_LOCATIONS: MasterLocation[] = [
@@ -63,6 +64,7 @@ export const getMasterData = async (): Promise<MasterItem[]> => {
       // Seed default
       try {
           const batch = writeBatch(db);
+          // Initial seed is small, so no chunking needed here usually, but good practice to keep it safe
           DEFAULT_MASTER_DATA.forEach(item => {
               const docRef = doc(collection(db, COLLECTIONS.MASTER_DATA));
               batch.set(docRef, item);
@@ -89,14 +91,28 @@ export const saveMasterData = async (data: MasterItem[]) => {
   setLocal(LOCAL_KEYS.MASTER_DATA, data);
   
   try {
-    const batch = writeBatch(db);
-    data.forEach(item => {
-       const docRef = doc(db, COLLECTIONS.MASTER_DATA, item.sku);
-       batch.set(docRef, item);
-    });
-    await batch.commit();
+    // Firestore Batch Limit is 500 operations. We chunk data to respect this.
+    const CHUNK_SIZE = 450; 
+    const chunks = [];
+    
+    for (let i = 0; i < data.length; i += CHUNK_SIZE) {
+        chunks.push(data.slice(i, i + CHUNK_SIZE));
+    }
+
+    // Process chunks sequentially
+    for (const chunk of chunks) {
+        const batch = writeBatch(db);
+        chunk.forEach(item => {
+            // Using SKU as Document ID ensures no duplicates
+            const docRef = doc(db, COLLECTIONS.MASTER_DATA, item.sku);
+            batch.set(docRef, item);
+        });
+        await batch.commit();
+    }
+    console.log(`Successfully synced ${data.length} items to Firestore in ${chunks.length} batches.`);
   } catch (error) {
     console.error("Error saving to Firestore (Data saved locally only):", error);
+    alert("Warning: Data saved locally but failed to sync to server. Please check internet connection.");
   }
 };
 
