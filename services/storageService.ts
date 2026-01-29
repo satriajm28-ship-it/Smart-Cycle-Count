@@ -46,64 +46,69 @@ export const getMasterData = async (): Promise<MasterItem[]> => {
   try {
     const querySnapshot = await getDocs(collection(db, COLLECTIONS.MASTER_DATA));
     if (querySnapshot.empty) {
-      // Seed data if empty
-      const batch = writeBatch(db);
-      DEFAULT_MASTER_DATA.forEach(item => {
-        const docRef = doc(collection(db, COLLECTIONS.MASTER_DATA));
-        batch.set(docRef, item);
-      });
-      await batch.commit();
+      // Seed data if empty (only attempts if read permissions allow)
+      try {
+        const batch = writeBatch(db);
+        DEFAULT_MASTER_DATA.forEach(item => {
+            const docRef = doc(collection(db, COLLECTIONS.MASTER_DATA));
+            batch.set(docRef, item);
+        });
+        await batch.commit();
+      } catch (writeError) {
+        console.warn("Could not seed data (write permission denied), returning default local data.");
+      }
       return DEFAULT_MASTER_DATA;
     }
     return querySnapshot.docs.map(doc => doc.data() as MasterItem);
   } catch (error) {
-    console.error("Error fetching master data:", error);
-    return [];
+    console.warn("Firestore read failed (using local data):", error);
+    // Fallback to local data so app works
+    return DEFAULT_MASTER_DATA;
   }
 };
 
 export const saveMasterData = async (data: MasterItem[]) => {
-  // Warning: This strategy overwrites. For Firestore, usually we update incrementally.
-  // For this demo, we will batch delete and rewrite (not efficient for production, but simple for sync)
-  // A better production approach is checking existence before write.
-  
-  // Implementation omitted for full batch sync complexity, 
-  // but let's at least allow adding NEW items efficiently.
-  const batch = writeBatch(db);
-  data.forEach(item => {
-     // Create a doc reference. We can use SKU as ID to prevent duplicates
-     const docRef = doc(db, COLLECTIONS.MASTER_DATA, item.sku);
-     batch.set(docRef, item);
-  });
-  await batch.commit();
+  try {
+    const batch = writeBatch(db);
+    data.forEach(item => {
+       const docRef = doc(db, COLLECTIONS.MASTER_DATA, item.sku);
+       batch.set(docRef, item);
+    });
+    await batch.commit();
+  } catch (error) {
+    console.error("Error saving master data:", error);
+    // Silent fail or alert
+  }
 };
 
 export const getMasterLocations = async (): Promise<MasterLocation[]> => {
     try {
         const querySnapshot = await getDocs(collection(db, COLLECTIONS.MASTER_LOCATIONS));
         if (querySnapshot.empty) {
-            const batch = writeBatch(db);
-            DEFAULT_LOCATIONS.forEach(loc => {
-                const docRef = doc(collection(db, COLLECTIONS.MASTER_LOCATIONS));
-                batch.set(docRef, loc);
-            });
-            await batch.commit();
+            try {
+                const batch = writeBatch(db);
+                DEFAULT_LOCATIONS.forEach(loc => {
+                    const docRef = doc(collection(db, COLLECTIONS.MASTER_LOCATIONS));
+                    batch.set(docRef, loc);
+                });
+                await batch.commit();
+            } catch(e) {}
             return DEFAULT_LOCATIONS;
         }
         return querySnapshot.docs.map(doc => doc.data() as MasterLocation);
     } catch (e) {
-        return [];
+        console.warn("Firestore read locations failed (using local data)");
+        return DEFAULT_LOCATIONS;
     }
 };
 
 export const getAuditLogs = async (): Promise<AuditRecord[]> => {
   try {
-      // Order by timestamp desc
       const q = query(collection(db, COLLECTIONS.AUDIT_LOGS), orderBy("timestamp", "desc"));
       const querySnapshot = await getDocs(q);
       return querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as AuditRecord));
   } catch (e) {
-      console.error(e);
+      console.warn("Error fetching logs, returning empty list", e);
       return [];
   }
 };
@@ -113,7 +118,7 @@ export const saveAuditLog = async (record: AuditRecord) => {
       await addDoc(collection(db, COLLECTIONS.AUDIT_LOGS), record);
       await updateLocationStatus(record.location, 'audited', { teamMember: record.teamMember });
   } catch (e) {
-      console.error("Error saving log", e);
+      console.error("Error saving log (Demo Mode)", e);
   }
 };
 
@@ -144,7 +149,6 @@ export const updateLocationStatus = async (
             description: data?.description,
             reportedBy: data?.teamMember
         };
-        // Use locationName as document ID for easy lookup/overwrite
         await setDoc(doc(db, COLLECTIONS.LOCATION_STATES, locationName), state, { merge: true });
     } catch (e) {
         console.error("Error updating location", e);
