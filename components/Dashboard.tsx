@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { getAuditLogs, getMasterData, getMasterLocations, getLocationStates } from '../services/storageService';
-import { AuditRecord, AppView, MasterItem } from '../types';
+import { AuditRecord, AppView, MasterItem, LocationState } from '../types';
 import * as XLSX from 'xlsx';
 
 interface DashboardProps {
@@ -107,7 +107,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
             // Location Stats
             const totalLocs = masterLocations.length;
             let la = 0, le = 0, ld = 0;
-            Object.values(locationStates).forEach((s: any) => {
+            Object.values(locationStates).forEach((s: LocationState) => {
                 if (s.status === 'audited') la++;
                 if (s.status === 'empty') le++;
                 if (s.status === 'damaged') ld++;

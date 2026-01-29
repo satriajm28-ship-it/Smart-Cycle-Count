@@ -10,7 +10,7 @@ import {
   orderBy, 
   writeBatch
 } from 'firebase/firestore';
-import { AuditRecord, MasterItem, MasterLocation, LocationState } from '../types';
+import { AuditRecord, MasterItem, MasterLocation, LocationState, LocationStatusType } from '../types';
 
 const COLLECTIONS = {
   MASTER_DATA: 'master_data',
@@ -42,56 +42,60 @@ const DEFAULT_LOCATIONS: MasterLocation[] = [
     { id: '4', name: 'RACK-A-02-B', zone: 'Zone A' },
 ];
 
-// Helper to get local data
+// Helper to get local data with safer typing
 const getLocal = <T>(key: string, defaultVal: T): T => {
-    const saved = localStorage.getItem(key);
-    return saved ? JSON.parse(saved) : defaultVal;
+    try {
+        const saved = localStorage.getItem(key);
+        if (!saved) return defaultVal;
+        return JSON.parse(saved) as T;
+    } catch (e) {
+        return defaultVal;
+    }
 };
 
 // Helper to set local data
 const setLocal = (key: string, data: any) => {
-    localStorage.setItem(key, JSON.stringify(data));
+    try {
+        localStorage.setItem(key, JSON.stringify(data));
+    } catch (e) {
+        console.warn("LocalStorage full or disabled");
+    }
 };
 
 export const getMasterData = async (): Promise<MasterItem[]> => {
   try {
     const querySnapshot = await getDocs(collection(db, COLLECTIONS.MASTER_DATA));
     if (querySnapshot.empty) {
-      // Check local storage first before using hardcoded defaults
-      const localData = getLocal(LOCAL_KEYS.MASTER_DATA, null);
-      if (localData) return localData;
+      // Check local storage first
+      const localData = getLocal<MasterItem[] | null>(LOCAL_KEYS.MASTER_DATA, null);
+      if (localData && localData.length > 0) return localData;
 
-      // Seed default
+      // Seed default if absolutely nothing exists
       try {
           const batch = writeBatch(db);
-          // Initial seed is small, so no chunking needed here usually, but good practice to keep it safe
           DEFAULT_MASTER_DATA.forEach(item => {
               const docRef = doc(collection(db, COLLECTIONS.MASTER_DATA));
               batch.set(docRef, item);
           });
           await batch.commit();
       } catch (e) { 
-          // If seeding fails, save defaults to local storage so we have something
           setLocal(LOCAL_KEYS.MASTER_DATA, DEFAULT_MASTER_DATA);
       }
       return DEFAULT_MASTER_DATA;
     }
     const data = querySnapshot.docs.map(doc => doc.data() as MasterItem);
-    // Sync to local
     setLocal(LOCAL_KEYS.MASTER_DATA, data);
     return data;
   } catch (error) {
     console.warn("Firestore read failed, using Local Storage:", error);
-    return getLocal(LOCAL_KEYS.MASTER_DATA, DEFAULT_MASTER_DATA);
+    return getLocal<MasterItem[]>(LOCAL_KEYS.MASTER_DATA, DEFAULT_MASTER_DATA);
   }
 };
 
 export const saveMasterData = async (data: MasterItem[]) => {
-  // Always update local storage first to ensure UI updates immediately
   setLocal(LOCAL_KEYS.MASTER_DATA, data);
   
   try {
-    // Firestore Batch Limit is 500 operations. We chunk data to respect this.
     const CHUNK_SIZE = 450; 
     const chunks = [];
     
@@ -99,20 +103,16 @@ export const saveMasterData = async (data: MasterItem[]) => {
         chunks.push(data.slice(i, i + CHUNK_SIZE));
     }
 
-    // Process chunks sequentially
     for (const chunk of chunks) {
         const batch = writeBatch(db);
         chunk.forEach(item => {
-            // Using SKU as Document ID ensures no duplicates
             const docRef = doc(db, COLLECTIONS.MASTER_DATA, item.sku);
             batch.set(docRef, item);
         });
         await batch.commit();
     }
-    console.log(`Successfully synced ${data.length} items to Firestore in ${chunks.length} batches.`);
   } catch (error) {
-    console.error("Error saving to Firestore (Data saved locally only):", error);
-    alert("Warning: Data saved locally but failed to sync to server. Please check internet connection.");
+    console.error("Error saving to Firestore:", error);
   }
 };
 
@@ -120,15 +120,15 @@ export const getMasterLocations = async (): Promise<MasterLocation[]> => {
     try {
         const querySnapshot = await getDocs(collection(db, COLLECTIONS.MASTER_LOCATIONS));
         if (querySnapshot.empty) {
-             const local = getLocal(LOCAL_KEYS.LOCATIONS, null);
-             if (local) return local;
+             const local = getLocal<MasterLocation[] | null>(LOCAL_KEYS.LOCATIONS, null);
+             if (local && local.length > 0) return local;
              return DEFAULT_LOCATIONS;
         }
         const data = querySnapshot.docs.map(doc => doc.data() as MasterLocation);
         setLocal(LOCAL_KEYS.LOCATIONS, data);
         return data;
     } catch (e) {
-        return getLocal(LOCAL_KEYS.LOCATIONS, DEFAULT_LOCATIONS);
+        return getLocal<MasterLocation[]>(LOCAL_KEYS.LOCATIONS, DEFAULT_LOCATIONS);
     }
 };
 
@@ -140,38 +140,36 @@ export const getAuditLogs = async (): Promise<AuditRecord[]> => {
       setLocal(LOCAL_KEYS.AUDIT_LOGS, data);
       return data;
   } catch (e) {
-      return getLocal(LOCAL_KEYS.AUDIT_LOGS, []);
-  }
-};
-
-export const saveAuditLog = async (record: AuditRecord) => {
-  // Save locally
-  const currentLogs = getLocal<AuditRecord[]>(LOCAL_KEYS.AUDIT_LOGS, []);
-  setLocal(LOCAL_KEYS.AUDIT_LOGS, [record, ...currentLogs]);
-  
-  // Update local state as well
-  updateLocationStatusLocal(record.location, 'audited', { teamMember: record.teamMember });
-
-  try {
-      await addDoc(collection(db, COLLECTIONS.AUDIT_LOGS), record);
-      await updateLocationStatus(record.location, 'audited', { teamMember: record.teamMember });
-  } catch (e) {
-      console.error("Error saving log to Firestore (Saved Locally)", e);
+      return getLocal<AuditRecord[]>(LOCAL_KEYS.AUDIT_LOGS, []);
   }
 };
 
 // Helper for local state update
-const updateLocationStatusLocal = (locationId: string, status: string, data?: any) => {
+const updateLocationStatusLocal = (locationId: string, status: LocationStatusType, data?: any) => {
     const currentStates = getLocal<Record<string, LocationState>>(LOCAL_KEYS.STATES, {});
     currentStates[locationId] = {
         locationId,
-        status: status as any,
+        status,
         timestamp: Date.now(),
         photoUrl: data?.photoUrl,
         description: data?.description,
         reportedBy: data?.teamMember
     };
     setLocal(LOCAL_KEYS.STATES, currentStates);
+};
+
+export const saveAuditLog = async (record: AuditRecord) => {
+  const currentLogs = getLocal<AuditRecord[]>(LOCAL_KEYS.AUDIT_LOGS, []);
+  setLocal(LOCAL_KEYS.AUDIT_LOGS, [record, ...currentLogs]);
+  
+  updateLocationStatusLocal(record.location, 'audited', { teamMember: record.teamMember });
+
+  try {
+      await addDoc(collection(db, COLLECTIONS.AUDIT_LOGS), record);
+      await updateLocationStatus(record.location, 'audited', { teamMember: record.teamMember });
+  } catch (e) {
+      console.error("Error saving log to Firestore", e);
+  }
 };
 
 export const getLocationStates = async (): Promise<Record<string, LocationState>> => {
@@ -185,15 +183,15 @@ export const getLocationStates = async (): Promise<Record<string, LocationState>
             setLocal(LOCAL_KEYS.STATES, states);
             return states;
         }
-        return getLocal(LOCAL_KEYS.STATES, {});
+        return getLocal<Record<string, LocationState>>(LOCAL_KEYS.STATES, {});
     } catch (e) {
-        return getLocal(LOCAL_KEYS.STATES, {});
+        return getLocal<Record<string, LocationState>>(LOCAL_KEYS.STATES, {});
     }
 };
 
 export const updateLocationStatus = async (
     locationName: string, 
-    status: 'audited' | 'empty' | 'damaged',
+    status: LocationStatusType,
     data?: { photoUrl?: string, description?: string, teamMember?: string }
 ) => {
     updateLocationStatusLocal(locationName, status, data);

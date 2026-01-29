@@ -415,7 +415,7 @@ export const AuditForm: React.FC<AuditFormProps> = ({ onSuccess, initialLocation
                         <div className="ml-3">
                             <h3 className="text-sm font-bold text-red-800 dark:text-red-200">Selisih Besar!</h3>
                             <div className="mt-1 text-sm text-red-700 dark:text-red-300">
-                                <p>Wajib mengambil foto bukti fisik untuk selisih > 10%.</p>
+                                <p>Wajib mengambil foto bukti fisik untuk selisih &gt; 10%.</p>
                             </div>
                         </div>
                     </div>
