@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { MasterItem } from '../types';
 import { getMasterData, saveMasterData } from '../services/storageService';
-import { Download, Upload, FileSpreadsheet, Link as LinkIcon, Check, Sheet, ArrowRight, RefreshCw, Trash2 } from 'lucide-react';
+import { Download, Upload, FileSpreadsheet, Link as LinkIcon, Check, Sheet, ArrowRight, RefreshCw } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
 export const MasterData: React.FC = () => {
