@@ -1,5 +1,5 @@
 {
-  "name": "Copy of Smart Stock Opname",
+  "name": "Smart Stock Opname",
   "description": "Professional Inventory Count application with Barcode/QR scanning support, automatic batch/expiry lookup, variance calculation, and AI-powered insights using Gemini.",
   "requestFramePermissions": [
     "camera"
