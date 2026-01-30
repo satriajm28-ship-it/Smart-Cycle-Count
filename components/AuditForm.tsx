@@ -3,6 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { saveAuditLog, getAuditLogs, getMasterData } from '../services/storageService';
 import { MasterItem, AuditRecord } from '../types';
 import { v4 as uuidv4 } from 'uuid';
+import { ScannerModal } from './ScannerModal';
 
 interface AuditFormProps {
   onSuccess: () => void;
@@ -32,8 +33,10 @@ export const AuditForm: React.FC<AuditFormProps> = ({ onSuccess, initialLocation
   const [itemHistory, setItemHistory] = useState<AuditRecord[]>([]);
   const [existingTotal, setExistingTotal] = useState(0);
 
+  // Modal State
+  const [scannerType, setScannerType] = useState<'sku' | 'location' | null>(null);
+
   const [timestamp, setTimestamp] = useState(new Date());
-  const [isScanningSku, setIsScanningSku] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Load Master Data
@@ -53,24 +56,19 @@ export const AuditForm: React.FC<AuditFormProps> = ({ onSuccess, initialLocation
     return () => clearInterval(timer);
   }, []);
 
-  // Lookup Item Logic - AUTO FILL happens here
+  // Lookup Item Logic
   useEffect(() => {
     if (loadingData) return;
 
     if (sku.length >= 3) {
-      // Find all matching items to calculate Total System Stock
       const matchingItems = allMasterItems.filter(i => i.sku.toLowerCase() === sku.toLowerCase());
-      
-      // Use the first match for basic details (Name, etc.)
       const item = matchingItems.length > 0 ? matchingItems[0] : null;
       setFoundItem(item || null);
 
       if (item) {
-        // AUTO-FILL: Populate Batch and Expiry from Master Data (using the first match as default)
         setBatchNumber(item.batchNumber);
         setExpiryDate(item.expiryDate);
         
-        // Also fetch history
         const fetchHistory = async () => {
             const allLogs = await getAuditLogs();
             const history = allLogs.filter(log => log.sku === item.sku);
@@ -80,12 +78,8 @@ export const AuditForm: React.FC<AuditFormProps> = ({ onSuccess, initialLocation
         };
         fetchHistory();
       } else {
-        // Reset if not found, or keep manual input?
-        // Let's reset derived data but keep user input if they typed something manually
         setItemHistory([]);
         setExistingTotal(0);
-        // If it was previously found, but now typing a new SKU, clear fields to avoid confusion
-        // Only clear if user hasn't started typing a custom batch yet
         if (!batchNumber) setBatchNumber('');
         if (!expiryDate) setExpiryDate('');
       }
@@ -96,9 +90,7 @@ export const AuditForm: React.FC<AuditFormProps> = ({ onSuccess, initialLocation
     }
   }, [sku, loadingData, allMasterItems]);
 
-  // Derived Values
-  
-  // Calculate System Stock as TOTAL of all batches for this SKU
+  // System Stock = TOTAL of all entries for this SKU
   const systemStock = foundItem 
     ? allMasterItems
         .filter(i => i.sku.toLowerCase() === sku.toLowerCase())
@@ -109,23 +101,19 @@ export const AuditForm: React.FC<AuditFormProps> = ({ onSuccess, initialLocation
   const variance = globalTotal - systemStock;
   const activeItemName = foundItem ? foundItem.name : 'Unknown Item (New)';
 
-  // Percent Diff Calculation
   const percentDiff = (systemStock > 0) 
     ? Math.round((Math.abs(variance) / systemStock) * 100) 
     : 0;
   
   const isSignificant = systemStock > 0 && percentDiff > 10;
 
-  // Handle Input with Parsing Logic (Simulate Barcode Scanner)
   const handleSkuInput = (val: string) => {
-    // Simulator for GS1 or Comma Separated QR (SKU,BATCH,DATE)
     if (val.includes(',')) {
         const parts = val.split(',');
         if (parts.length >= 1) setSku(parts[0].trim());
         if (parts.length >= 2) setBatchNumber(parts[1].trim());
         if (parts.length >= 3) {
             let rawDate = parts[2].trim();
-            // Basic format fix YYYYMMDD -> YYYY-MM-DD
             if (rawDate.length === 8 && !rawDate.includes('-')) {
                 const year = rawDate.substring(0, 4);
                 const month = rawDate.substring(4, 6);
@@ -139,13 +127,13 @@ export const AuditForm: React.FC<AuditFormProps> = ({ onSuccess, initialLocation
     setSku(val);
   };
 
-  const handleScanSku = () => {
-    setIsScanningSku(true);
-    setTimeout(() => {
-      setIsScanningSku(false);
-      // Simulate scanning an item that exists in default data
-      handleSkuInput('BRG-882910'); 
-    }, 500);
+  const handleScanSuccess = (decodedText: string) => {
+    if (scannerType === 'sku') {
+      handleSkuInput(decodedText);
+    } else if (scannerType === 'location') {
+      setLocation(decodedText.toUpperCase());
+    }
+    setScannerType(null);
   };
 
   const handleQtyChange = (val: number) => {
@@ -187,7 +175,7 @@ export const AuditForm: React.FC<AuditFormProps> = ({ onSuccess, initialLocation
       location,
       batchNumber: batchNumber || 'N/A',
       expiryDate: expiryDate || 'N/A',
-      systemQty: systemStock, // Saves the Aggregate Total System Qty as the snapshot
+      systemQty: systemStock, 
       physicalQty: physicalQty,
       variance: variance, 
       timestamp: Date.now(),
@@ -215,6 +203,13 @@ export const AuditForm: React.FC<AuditFormProps> = ({ onSuccess, initialLocation
   return (
     <div className="bg-background-light dark:bg-background-dark text-slate-900 dark:text-white font-display min-h-screen flex flex-col antialiased selection:bg-primary/20 selection:text-primary">
         
+        <ScannerModal 
+          isOpen={!!scannerType} 
+          onClose={() => setScannerType(null)} 
+          onScanSuccess={handleScanSuccess}
+          title={scannerType === 'sku' ? "Scan Kode Barang" : "Scan Lokasi Rak"}
+        />
+
         {/* NAV */}
         <nav className="sticky top-0 z-20 bg-background-light/95 dark:bg-background-dark/95 backdrop-blur-sm border-b border-slate-200 dark:border-slate-800 px-4 py-3 flex items-center justify-between">
             <button onClick={onSuccess} className="flex items-center justify-center w-10 h-10 rounded-full hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors text-slate-700 dark:text-slate-300">
@@ -222,7 +217,7 @@ export const AuditForm: React.FC<AuditFormProps> = ({ onSuccess, initialLocation
             </button>
             <div className="flex flex-col items-center">
                 <h1 className="text-lg font-bold text-slate-900 dark:text-white leading-tight">Stock Opname</h1>
-                <span className="text-[10px] font-medium text-slate-500 dark:text-slate-400 bg-slate-200 dark:bg-slate-800 px-2 py-0.5 rounded-full">Multi-Location Mode</span>
+                <span className="text-[10px] font-medium text-slate-500 dark:text-slate-400 bg-slate-200 dark:bg-slate-800 px-2 py-0.5 rounded-full">Mode Audit Real-Time</span>
             </div>
             <div className="w-10"></div>
         </nav>
@@ -239,16 +234,16 @@ export const AuditForm: React.FC<AuditFormProps> = ({ onSuccess, initialLocation
 
             {/* Team Section */}
             <section className="mb-6">
-                <h3 className="text-sm font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2 px-1">Team Pelaksana</h3>
+                <h3 className="text-sm font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2 px-1 text-[10px]">Team Pelaksana</h3>
                 <div className="bg-white dark:bg-slate-800 rounded-xl p-3 shadow-sm border border-slate-100 dark:border-slate-700 flex items-center justify-between group">
                     <div className="flex items-center gap-3 overflow-hidden">
                         <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-blue-50 dark:bg-blue-900/30 text-primary">
                             <span className="material-symbols-outlined">groups</span>
                         </div>
                         <div className="flex flex-col truncate w-full">
-                            <span className="text-sm text-slate-500 dark:text-slate-400">Current Team</span>
+                            <span className="text-[10px] text-slate-500 dark:text-slate-400">Current Team</span>
                             <input 
-                                className="text-base font-medium text-slate-900 dark:text-white truncate bg-transparent border-none p-0 focus:ring-0 placeholder-slate-400"
+                                className="text-sm font-medium text-slate-900 dark:text-white truncate bg-transparent border-none p-0 focus:ring-0 placeholder-slate-400"
                                 value={teamName}
                                 onChange={(e) => setTeamName(e.target.value)}
                             />
@@ -259,9 +254,9 @@ export const AuditForm: React.FC<AuditFormProps> = ({ onSuccess, initialLocation
 
             {/* Item Details */}
             <section className="mb-6 space-y-4">
-                <h3 className="text-sm font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2 px-1">Item Details</h3>
+                <h3 className="text-sm font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2 px-1 text-[10px]">Item Details</h3>
                 <div>
-                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">Kode Barang (SKU)</label>
+                    <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5">Kode Barang (SKU)</label>
                     <div className="relative flex items-center">
                         <input 
                             className="w-full h-12 pl-4 pr-14 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-primary focus:border-primary transition-shadow font-mono text-base placeholder:text-slate-400" 
@@ -271,33 +266,22 @@ export const AuditForm: React.FC<AuditFormProps> = ({ onSuccess, initialLocation
                             onChange={(e) => handleSkuInput(e.target.value)}
                         />
                         <button 
-                            onClick={handleScanSku}
-                            className="absolute right-1 top-1 bottom-1 w-12 bg-primary/10 hover:bg-primary/20 text-primary rounded-lg flex items-center justify-center transition-colors"
+                            onClick={() => setScannerType('sku')}
+                            className="absolute right-1 top-1 bottom-1 w-12 bg-primary text-white rounded-lg flex items-center justify-center transition-colors shadow-sm"
                         >
                             <span className="material-symbols-outlined">barcode_scanner</span>
                         </button>
                     </div>
-                    {foundItem ? (
-                        <p className="text-xs text-green-600 dark:text-green-400 mt-1 flex items-center gap-1">
-                            <span className="material-symbols-outlined text-[14px]">check_circle</span>
-                            Data ditemukan di Master
-                        </p>
-                    ) : sku.length > 3 ? (
-                        <p className="text-xs text-orange-500 mt-1 flex items-center gap-1">
-                            <span className="material-symbols-outlined text-[14px]">info</span>
-                            Item tidak ada di Master (Input Manual)
-                        </p>
-                    ) : null}
                 </div>
                 
                 <div className="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-4 border border-slate-200 dark:border-slate-700 space-y-4">
                     <div>
-                        <span className="text-xs text-slate-500 dark:text-slate-400 block mb-1">Nama Barang</span>
-                        <p className="text-base font-medium text-slate-800 dark:text-slate-200">{activeItemName}</p>
+                        <span className="text-[10px] text-slate-500 dark:text-slate-400 block mb-1 uppercase tracking-tighter">Nama Barang</span>
+                        <p className="text-sm font-bold text-slate-800 dark:text-slate-200">{activeItemName}</p>
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                         <div>
-                            <span className="text-xs text-slate-500 dark:text-slate-400 block mb-1">Batch Number</span>
+                            <span className="text-[10px] text-slate-500 dark:text-slate-400 block mb-1 uppercase tracking-tighter">Batch Number</span>
                             <div className="relative">
                                 <span className="absolute left-2 top-1/2 -translate-y-1/2 material-symbols-outlined text-[16px] text-slate-400">tag</span>
                                 <input 
@@ -309,7 +293,7 @@ export const AuditForm: React.FC<AuditFormProps> = ({ onSuccess, initialLocation
                             </div>
                         </div>
                         <div>
-                            <span className="text-xs text-slate-500 dark:text-slate-400 block mb-1">Expired Date</span>
+                            <span className="text-[10px] text-slate-500 dark:text-slate-400 block mb-1 uppercase tracking-tighter">Expired Date</span>
                             <div className="relative">
                                 <span className="absolute left-2 top-1/2 -translate-y-1/2 material-symbols-outlined text-[16px] text-slate-400">event</span>
                                 <input 
@@ -324,25 +308,25 @@ export const AuditForm: React.FC<AuditFormProps> = ({ onSuccess, initialLocation
                 </div>
             </section>
 
-             {/* Entry Lokasi Baru */}
+             {/* Entry Lokasi Audit */}
              <section className="mb-6">
-                <div className="flex items-center justify-between mb-2 px-1">
-                    <h3 className="text-sm font-semibold text-primary uppercase tracking-wider flex items-center gap-1">
-                        <span className="material-symbols-outlined text-base">add_location_alt</span>
-                        Lokasi Audit
-                    </h3>
-                </div>
-                <div className="bg-white dark:bg-slate-800 rounded-xl p-4 shadow-sm border border-primary/20 ring-1 ring-primary/5">
-                    <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5 uppercase">Lokasi Rak / Bin</label>
+                <h3 className="text-sm font-semibold text-primary uppercase tracking-wider mb-2 px-1 text-[10px] flex items-center gap-1">
+                    <span className="material-symbols-outlined text-base">add_location_alt</span>
+                    Lokasi Rak / Bin
+                </h3>
+                <div className="bg-white dark:bg-slate-800 rounded-xl p-3 shadow-sm border border-primary/20 ring-1 ring-primary/5">
                     <div className="relative flex items-center">
                         <input 
                             className="w-full h-12 pl-4 pr-14 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-primary focus:border-primary transition-shadow font-mono text-base uppercase placeholder:text-slate-400" 
-                            placeholder="Scan location..." 
+                            placeholder="Scan/Input Location..." 
                             type="text" 
                             value={location}
                             onChange={(e) => setLocation(e.target.value)}
                         />
-                        <button className="absolute right-1 top-1 bottom-1 w-12 bg-primary/10 hover:bg-primary/20 text-primary rounded-lg flex items-center justify-center transition-colors">
+                        <button 
+                            onClick={() => setScannerType('location')}
+                            className="absolute right-1 top-1 bottom-1 w-12 bg-primary text-white rounded-lg flex items-center justify-center transition-colors"
+                        >
                             <span className="material-symbols-outlined">qr_code_scanner</span>
                         </button>
                     </div>
@@ -353,9 +337,9 @@ export const AuditForm: React.FC<AuditFormProps> = ({ onSuccess, initialLocation
             {itemHistory.length > 0 && (
                 <section className="mb-6">
                     <div className="flex items-center justify-between mb-2 px-1">
-                        <h3 className="text-sm font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Sudah Diaudit di:</h3>
+                        <h3 className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Terinput di Lokasi Lain:</h3>
                         <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300">
-                            {existingTotal} Pcs (Total)
+                            Sum: {existingTotal} Pcs
                         </span>
                     </div>
                     <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden shadow-sm max-h-40 overflow-y-auto">
@@ -365,16 +349,16 @@ export const AuditForm: React.FC<AuditFormProps> = ({ onSuccess, initialLocation
                                     <span className="material-symbols-outlined text-green-500 text-[14px]">check_circle</span>
                                     <span className="font-medium">{log.location}</span>
                                 </div>
-                                <span className="font-mono font-bold">{log.physicalQty}</span>
+                                <span className="font-mono font-bold text-slate-900 dark:text-slate-100">{log.physicalQty}</span>
                             </div>
                         ))}
                     </div>
                 </section>
             )}
 
-            {/* Global Calculation */}
+            {/* Input Stok Fisik */}
             <section className="mb-4">
-                <h3 className="text-sm font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2 px-1">Input Stok Fisik</h3>
+                <h3 className="text-sm font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2 px-1 text-[10px]">Stok Fisik di Lokasi Ini</h3>
                 <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
                     <div className="p-5">
                         <div className="flex gap-4">
@@ -403,11 +387,11 @@ export const AuditForm: React.FC<AuditFormProps> = ({ onSuccess, initialLocation
                     {foundItem && (
                         <div className={`p-4 ${isSignificant ? 'bg-red-50 dark:bg-red-900/10 border-t border-red-100 dark:border-red-900/30' : 'bg-slate-50 dark:bg-slate-900/50 border-t border-slate-100 dark:border-slate-700'}`}>
                             <div className="flex items-center justify-between">
-                                <span className={`text-sm font-bold flex items-center gap-1.5 ${isSignificant ? 'text-red-600 dark:text-red-400' : 'text-slate-700 dark:text-slate-300'}`}>
+                                <span className={`text-xs font-bold flex items-center gap-1.5 ${isSignificant ? 'text-red-600 dark:text-red-400' : 'text-slate-700 dark:text-slate-300'}`}>
                                     {isSignificant && <span className="material-symbols-outlined text-[18px]">warning</span>}
-                                    Selisih vs System ({systemStock})
+                                    Diff vs System ({systemStock})
                                 </span>
-                                <span className={`text-xl font-mono font-black ${isSignificant ? 'text-red-600 dark:text-red-400' : variance === 0 ? 'text-green-600 dark:text-green-400' : 'text-slate-700 dark:text-slate-300'}`}>
+                                <span className={`text-lg font-mono font-black ${isSignificant ? 'text-red-600 dark:text-red-400' : variance === 0 ? 'text-green-600 dark:text-green-400' : 'text-slate-700 dark:text-slate-300'}`}>
                                     {variance > 0 ? '+' : ''}{variance}
                                 </span>
                             </div>
@@ -416,30 +400,13 @@ export const AuditForm: React.FC<AuditFormProps> = ({ onSuccess, initialLocation
                 </div>
             </section>
 
-            {/* Warning Box */}
-            {isSignificant && (
-                <div className="mb-6 bg-red-50 dark:bg-red-900/20 border-l-4 border-red-500 p-4 rounded-r-lg" role="alert">
-                    <div className="flex items-start">
-                        <div className="flex-shrink-0">
-                            <span className="material-symbols-outlined text-red-500 text-[24px]">add_a_photo</span>
-                        </div>
-                        <div className="ml-3">
-                            <h3 className="text-sm font-bold text-red-800 dark:text-red-200">Selisih Besar!</h3>
-                            <div className="mt-1 text-sm text-red-700 dark:text-red-300">
-                                <p>Wajib mengambil foto bukti fisik untuk selisih &gt; 10%.</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            )}
-
             {/* Evidence Photos */}
             <section className="mb-6">
                 <div className="flex items-center justify-between mb-2 px-1">
-                    <h3 className={`text-sm font-semibold uppercase tracking-wider flex items-center gap-1 ${isSignificant ? 'text-red-600 dark:text-red-400' : 'text-slate-500 dark:text-slate-400'}`}>
+                    <h3 className={`text-[10px] font-semibold uppercase tracking-wider flex items-center gap-1 ${isSignificant ? 'text-red-600 dark:text-red-400' : 'text-slate-500 dark:text-slate-400'}`}>
                         Bukti Foto
                     </h3>
-                    <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${isSignificant ? 'bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300' : 'bg-slate-100 text-slate-500'}`}>
+                    <span className={`text-[8px] px-2 py-0.5 rounded-full font-bold ${isSignificant ? 'bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300' : 'bg-slate-100 text-slate-500'}`}>
                         {isSignificant ? 'Wajib' : 'Optional'}
                     </span>
                 </div>
@@ -453,20 +420,9 @@ export const AuditForm: React.FC<AuditFormProps> = ({ onSuccess, initialLocation
                                 </button>
                             </div>
                          ))}
-                        <input 
-                            type="file" 
-                            accept="image/*" 
-                            capture="environment" 
-                            ref={fileInputRef} 
-                            className="hidden" 
-                            onChange={handlePhotoCapture}
-                        />
-                        <button 
-                            onClick={() => fileInputRef.current?.click()}
-                            className="aspect-square rounded-lg border-2 border-dashed border-red-300 dark:border-red-800 bg-red-50 dark:bg-red-900/10 flex flex-col items-center justify-center gap-1 text-red-400 dark:text-red-500 hover:bg-red-100 dark:hover:bg-red-900/20 transition-colors"
-                        >
+                        <input type="file" accept="image/*" capture="environment" ref={fileInputRef} className="hidden" onChange={handlePhotoCapture} />
+                        <button onClick={() => fileInputRef.current?.click()} className="aspect-square rounded-lg border-2 border-dashed border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 flex flex-col items-center justify-center gap-1 text-slate-400 hover:border-primary/50 transition-colors">
                             <span className="material-symbols-outlined text-[24px]">add_a_photo</span>
-                            <span className="text-[10px] font-medium">Tambah</span>
                         </button>
                     </div>
                 </div>
@@ -474,17 +430,13 @@ export const AuditForm: React.FC<AuditFormProps> = ({ onSuccess, initialLocation
 
             {/* Notes Section */}
             <section className="mb-6">
-                <h3 className="text-sm font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2 px-1 flex items-center gap-1">
-                    Catatan
-                </h3>
-                <div>
-                    <textarea 
-                        className="w-full rounded-xl border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-primary focus:border-primary transition-shadow p-3 text-sm placeholder:text-slate-400 min-h-[80px]" 
-                        placeholder="Alasan selisih..."
-                        value={notes}
-                        onChange={(e) => setNotes(e.target.value)}
-                    ></textarea>
-                </div>
+                <h3 className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2 px-1">Catatan</h3>
+                <textarea 
+                    className="w-full rounded-xl border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-primary focus:border-primary transition-shadow p-3 text-sm placeholder:text-slate-400 min-h-[80px]" 
+                    placeholder="Alasan selisih..."
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                ></textarea>
             </section>
         </main>
 
@@ -492,23 +444,12 @@ export const AuditForm: React.FC<AuditFormProps> = ({ onSuccess, initialLocation
         <footer className="fixed bottom-0 left-0 right-0 z-30 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 p-4 pb-8 safe-area-pb">
             <div className="max-w-lg mx-auto flex gap-3">
                 <button 
-                    onClick={() => {
-                        setSku('');
-                        setPhysicalQty(0);
-                        setFoundItem(null);
-                        setBatchNumber('');
-                        setExpiryDate('');
-                        setNotes('');
-                        setEvidencePhotos([]);
-                    }}
-                    className="flex-1 h-12 flex items-center justify-center rounded-xl border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 font-medium hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+                    onClick={() => { setSku(''); setPhysicalQty(0); setNotes(''); setEvidencePhotos([]); }}
+                    className="flex-1 h-12 flex items-center justify-center rounded-xl border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 font-medium hover:bg-slate-50 transition-colors"
                 >
                     Reset
                 </button>
-                <button 
-                    onClick={handleSubmit}
-                    className="flex-[2] h-12 flex items-center justify-center gap-2 rounded-xl bg-primary hover:bg-blue-700 text-white font-bold shadow-lg shadow-blue-500/30 transition-all active:scale-[0.98]"
-                >
+                <button onClick={handleSubmit} className="flex-[2] h-12 flex items-center justify-center gap-2 rounded-xl bg-primary hover:bg-blue-700 text-white font-bold shadow-lg shadow-blue-500/30 transition-all active:scale-[0.98]">
                     <span className="material-symbols-outlined text-[20px] filled">check_circle</span>
                     Simpan
                 </button>
