@@ -8,7 +8,8 @@ import {
   doc, 
   query, 
   orderBy, 
-  writeBatch
+  writeBatch,
+  onSnapshot
 } from 'firebase/firestore';
 import { AuditRecord, MasterItem, MasterLocation, LocationState, LocationStatusType } from '../types';
 
@@ -26,23 +27,7 @@ const LOCAL_KEYS = {
   STATES: 'local_states'
 };
 
-// Seed data
-const DEFAULT_MASTER_DATA: MasterItem[] = [
-  { sku: 'BRG-882910', name: 'Indomie Goreng Special 85g', systemStock: 50, batchNumber: 'BATCH-2023-X', expiryDate: '2024-12-12', category: 'Food', unit: 'Pcs' },
-  { sku: '123BX', name: 'Example Test Item', systemStock: 200, batchNumber: 'DEFAULT-BATCH', expiryDate: '2025-01-01', category: 'General', unit: 'Carton' },
-  { sku: '89999090901', name: 'Paracetamol 500mg', systemStock: 100, batchNumber: 'B202301', expiryDate: '2025-12-31', category: 'Medicine', unit: 'Box' },
-  { sku: '89999090902', name: 'Amoxicillin Syrup', systemStock: 50, batchNumber: 'B202305', expiryDate: '2024-06-30', category: 'Medicine', unit: 'Bottle' },
-  { sku: 'CABLE-001', name: 'USB-C Cable 1M', systemStock: 25, batchNumber: 'LOT-99', expiryDate: '2030-01-01', category: 'Electronics', unit: 'Pcs' },
-];
-
-const DEFAULT_LOCATIONS: MasterLocation[] = [
-    { id: '1', name: 'RACK-A-01-A', zone: 'Zone A' },
-    { id: '2', name: 'RACK-A-01-B', zone: 'Zone A' },
-    { id: '3', name: 'RACK-A-02-A', zone: 'Zone A' },
-    { id: '4', name: 'RACK-A-02-B', zone: 'Zone A' },
-];
-
-// Helper to get local data with safer typing
+// Helper to get local data
 const getLocal = <T>(key: string, defaultVal: T): T => {
     try {
         const saved = localStorage.getItem(key);
@@ -62,62 +47,60 @@ const setLocal = (key: string, data: any) => {
     }
 };
 
+// --- REAL-TIME SUBSCRIPTIONS (The "Automatic Update" part) ---
+
+export const subscribeToMasterData = (onUpdate: (data: MasterItem[]) => void) => {
+  return onSnapshot(collection(db, COLLECTIONS.MASTER_DATA), (snapshot) => {
+    const data = snapshot.docs.map(doc => doc.data() as MasterItem);
+    setLocal(LOCAL_KEYS.MASTER_DATA, data);
+    onUpdate(data);
+  });
+};
+
+export const subscribeToAuditLogs = (onUpdate: (data: AuditRecord[]) => void) => {
+  const q = query(collection(db, COLLECTIONS.AUDIT_LOGS), orderBy("timestamp", "desc"));
+  return onSnapshot(q, (snapshot) => {
+    const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as AuditRecord));
+    setLocal(LOCAL_KEYS.AUDIT_LOGS, data);
+    onUpdate(data);
+  });
+};
+
+export const subscribeToLocationStates = (onUpdate: (data: Record<string, LocationState>) => void) => {
+  return onSnapshot(collection(db, COLLECTIONS.LOCATION_STATES), (snapshot) => {
+    const states: Record<string, LocationState> = {};
+    snapshot.docs.forEach(doc => {
+      states[doc.id] = doc.data() as LocationState;
+    });
+    setLocal(LOCAL_KEYS.STATES, states);
+    onUpdate(states);
+  });
+};
+
+// --- TRADITIONAL FETCHERS ---
+
 export const getMasterData = async (): Promise<MasterItem[]> => {
   try {
     const querySnapshot = await getDocs(collection(db, COLLECTIONS.MASTER_DATA));
-    if (querySnapshot.empty) {
-      // Check local storage first
-      const localData = getLocal<MasterItem[] | null>(LOCAL_KEYS.MASTER_DATA, null);
-      if (localData && localData.length > 0) return localData;
-
-      // Seed default if absolutely nothing exists
-      try {
-          const batch = writeBatch(db);
-          DEFAULT_MASTER_DATA.forEach(item => {
-              const docRef = doc(collection(db, COLLECTIONS.MASTER_DATA));
-              batch.set(docRef, item);
-          });
-          await batch.commit();
-      } catch (e) { 
-          setLocal(LOCAL_KEYS.MASTER_DATA, DEFAULT_MASTER_DATA);
-      }
-      return DEFAULT_MASTER_DATA;
-    }
     const data = querySnapshot.docs.map(doc => doc.data() as MasterItem);
     setLocal(LOCAL_KEYS.MASTER_DATA, data);
     return data;
   } catch (error) {
-    console.warn("Firestore read failed, using Local Storage:", error);
-    return getLocal<MasterItem[]>(LOCAL_KEYS.MASTER_DATA, DEFAULT_MASTER_DATA);
+    return getLocal<MasterItem[]>(LOCAL_KEYS.MASTER_DATA, []);
   }
 };
 
 export const saveMasterData = async (data: MasterItem[]) => {
   setLocal(LOCAL_KEYS.MASTER_DATA, data);
-  
   try {
-    const CHUNK_SIZE = 450; 
-    const chunks = [];
-    
-    for (let i = 0; i < data.length; i += CHUNK_SIZE) {
-        chunks.push(data.slice(i, i + CHUNK_SIZE));
-    }
-
-    for (const chunk of chunks) {
-        const batch = writeBatch(db);
-        chunk.forEach(item => {
-            // Use composite ID (SKU + Batch + Expiry) to allow multiple rows per SKU (System = Total)
-            // Sanitize string to be safe for ID
-            const safeSku = (item.sku || 'UNKNOWN').replace(/[^a-zA-Z0-9-_]/g, '');
-            const safeBatch = (item.batchNumber || 'NOBATCH').replace(/[^a-zA-Z0-9-_]/g, '');
-            const safeExp = (item.expiryDate || 'NOEXP').replace(/[^a-zA-Z0-9-_]/g, '');
-            
-            const docId = `${safeSku}_${safeBatch}_${safeExp}`;
-            const docRef = doc(db, COLLECTIONS.MASTER_DATA, docId);
-            batch.set(docRef, item);
-        });
-        await batch.commit();
-    }
+    const batch = writeBatch(db);
+    data.forEach(item => {
+        const safeSku = (item.sku || 'UNKNOWN').replace(/[^a-zA-Z0-9-_]/g, '');
+        const docId = `${safeSku}_${item.batchNumber}_${item.expiryDate}`;
+        const docRef = doc(db, COLLECTIONS.MASTER_DATA, docId);
+        batch.set(docRef, item);
+    });
+    await batch.commit();
   } catch (error) {
     console.error("Error saving to Firestore:", error);
   }
@@ -126,16 +109,11 @@ export const saveMasterData = async (data: MasterItem[]) => {
 export const getMasterLocations = async (): Promise<MasterLocation[]> => {
     try {
         const querySnapshot = await getDocs(collection(db, COLLECTIONS.MASTER_LOCATIONS));
-        if (querySnapshot.empty) {
-             const local = getLocal<MasterLocation[] | null>(LOCAL_KEYS.LOCATIONS, null);
-             if (local && local.length > 0) return local;
-             return DEFAULT_LOCATIONS;
-        }
         const data = querySnapshot.docs.map(doc => doc.data() as MasterLocation);
         setLocal(LOCAL_KEYS.LOCATIONS, data);
         return data;
     } catch (e) {
-        return getLocal<MasterLocation[]>(LOCAL_KEYS.LOCATIONS, DEFAULT_LOCATIONS);
+        return getLocal<MasterLocation[]>(LOCAL_KEYS.LOCATIONS, []);
     }
 };
 
@@ -143,47 +121,24 @@ export const getAuditLogs = async (): Promise<AuditRecord[]> => {
   try {
       const q = query(collection(db, COLLECTIONS.AUDIT_LOGS), orderBy("timestamp", "desc"));
       const querySnapshot = await getDocs(q);
-      const data = querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as AuditRecord));
-      setLocal(LOCAL_KEYS.AUDIT_LOGS, data);
-      return data;
+      return querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as AuditRecord));
   } catch (e) {
       return getLocal<AuditRecord[]>(LOCAL_KEYS.AUDIT_LOGS, []);
   }
 };
 
-// Helper for local state update
-const updateLocationStatusLocal = (locationId: string, status: LocationStatusType, data?: any) => {
-    const currentStates = getLocal<Record<string, LocationState>>(LOCAL_KEYS.STATES, {});
-    currentStates[locationId] = {
-        locationId,
-        status,
-        timestamp: Date.now(),
-        photoUrl: data?.photoUrl,
-        description: data?.description,
-        reportedBy: data?.teamMember
-    };
-    setLocal(LOCAL_KEYS.STATES, currentStates);
-};
-
 export const saveAuditLog = async (record: AuditRecord) => {
-  const currentLogs = getLocal<AuditRecord[]>(LOCAL_KEYS.AUDIT_LOGS, []);
-  setLocal(LOCAL_KEYS.AUDIT_LOGS, [record, ...currentLogs]);
-  
-  // Update location status, including NOTES and PHOTO if available
-  // This ensures items with notes stay in 'Pending' if we filter by description
   const updateData = { 
       teamMember: record.teamMember,
       description: record.notes || undefined,
       photoUrl: (record.evidencePhotos && record.evidencePhotos.length > 0) ? record.evidencePhotos[0] : undefined
   };
 
-  updateLocationStatusLocal(record.location, 'audited', updateData);
-
   try {
       await addDoc(collection(db, COLLECTIONS.AUDIT_LOGS), record);
       await updateLocationStatus(record.location, 'audited', updateData);
   } catch (e) {
-      console.error("Error saving log to Firestore", e);
+      console.error("Error saving log", e);
   }
 };
 
@@ -191,14 +146,8 @@ export const getLocationStates = async (): Promise<Record<string, LocationState>
     try {
         const querySnapshot = await getDocs(collection(db, COLLECTIONS.LOCATION_STATES));
         const states: Record<string, LocationState> = {};
-        querySnapshot.docs.forEach(doc => {
-            states[doc.id] = doc.data() as LocationState;
-        });
-        if (Object.keys(states).length > 0) {
-            setLocal(LOCAL_KEYS.STATES, states);
-            return states;
-        }
-        return getLocal<Record<string, LocationState>>(LOCAL_KEYS.STATES, {});
+        querySnapshot.docs.forEach(doc => { states[doc.id] = doc.data() as LocationState; });
+        return states;
     } catch (e) {
         return getLocal<Record<string, LocationState>>(LOCAL_KEYS.STATES, {});
     }
@@ -209,7 +158,6 @@ export const updateLocationStatus = async (
     status: LocationStatusType,
     data?: { photoUrl?: string, description?: string, teamMember?: string }
 ) => {
-    updateLocationStatusLocal(locationName, status, data);
     try {
         const state: LocationState = {
             locationId: locationName,
@@ -221,6 +169,6 @@ export const updateLocationStatus = async (
         };
         await setDoc(doc(db, COLLECTIONS.LOCATION_STATES, locationName), state, { merge: true });
     } catch (e) {
-        console.error("Error updating location in Firestore", e);
+        console.error("Error updating location", e);
     }
 };

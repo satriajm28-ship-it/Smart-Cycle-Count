@@ -15,14 +15,17 @@ export const ScannerModal: React.FC<ScannerModalProps> = ({ isOpen, onClose, onS
 
   useEffect(() => {
     if (isOpen) {
-      // Small delay to ensure DOM is ready
+      // Small delay to ensure DOM is ready and browser focus is handled
       const timeout = setTimeout(() => {
         const scanner = new Html5QrcodeScanner(
           scannerId,
           { 
-            fps: 10, 
+            fps: 15, 
             qrbox: { width: 250, height: 250 },
-            aspectRatio: 1.0
+            aspectRatio: 1.0,
+            showTorchButtonIfSupported: true,
+            rememberLastUsedCamera: true,
+            supportedScanTypes: [0] // Camera only
           },
           /* verbose= */ false
         );
@@ -30,16 +33,16 @@ export const ScannerModal: React.FC<ScannerModalProps> = ({ isOpen, onClose, onS
         scanner.render(
           (decodedText) => {
             onScanSuccess(decodedText);
-            scanner.clear();
+            scanner.clear().catch(e => console.warn(e));
             onClose();
           },
           (errorMessage) => {
-            // Successively ignored
+            // Successively ignored during active scanning
           }
         );
         
         scannerRef.current = scanner;
-      }, 100);
+      }, 250);
 
       return () => {
         clearTimeout(timeout);
@@ -68,7 +71,7 @@ export const ScannerModal: React.FC<ScannerModalProps> = ({ isOpen, onClose, onS
         <div className="p-4 bg-slate-50 dark:bg-slate-950">
           <div id={scannerId} className="overflow-hidden rounded-xl border-2 border-primary/20"></div>
           <p className="text-[10px] text-slate-500 text-center mt-4">
-            Posisikan Barcode atau QR Code di dalam kotak untuk memproses scan otomatis.
+            Pastikan memberikan izin kamera saat diminta browser.<br/>Posisikan barcode di tengah kotak.
           </p>
         </div>
 
