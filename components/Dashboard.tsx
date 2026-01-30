@@ -51,8 +51,22 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
                 getLocationStates()
             ]);
 
-            const masterMap = new Map<string, MasterItem>();
-            masterData.forEach(m => masterMap.set(m.sku, m));
+            // Group Master Data by SKU to Calculate Total System Stock
+            const masterMap = new Map<string, MasterItem[]>();
+            masterData.forEach(m => {
+                if (!masterMap.has(m.sku)) masterMap.set(m.sku, []);
+                masterMap.get(m.sku)?.push(m);
+            });
+
+            const getSystemStock = (sku: string) => {
+                const items = masterMap.get(sku) || [];
+                return items.reduce((sum, item) => sum + item.systemStock, 0);
+            };
+
+            const getMasterInfo = (sku: string) => {
+                const items = masterMap.get(sku);
+                return items && items.length > 0 ? items[0] : undefined;
+            };
 
             // Group logs by SKU to calculate Global Counts
             const groups: Record<string, GroupedItem> = {};
@@ -60,14 +74,14 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
             // 1. Process Logs to Aggregate Counts
             logs.forEach(log => {
                 if (!groups[log.sku]) {
-                    const master = masterMap.get(log.sku);
+                    const master = getMasterInfo(log.sku);
                     groups[log.sku] = {
                         sku: log.sku,
                         name: log.itemName,
                         unit: master?.unit || 'Pcs',
                         logs: [],
-                        totalSystem: master?.systemStock || 0, // Master System Stock (Target)
-                        totalPhysical: 0, // Will act as accumulator
+                        totalSystem: getSystemStock(log.sku), // Aggregated System Stock
+                        totalPhysical: 0, 
                         variance: 0,
                         status: 'matched',
                         locationsCount: 0,
@@ -75,7 +89,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
                     };
                 }
                 groups[log.sku].logs.push(log);
-                groups[log.sku].totalPhysical += log.physicalQty; // Summing up: e.g. 6 + 6 + 57 = 69
+                groups[log.sku].totalPhysical += log.physicalQty; 
             });
 
             // Calculate Variances & Status based on Global Totals
@@ -392,7 +406,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
                                     <div className="col-span-2 text-center text-xs text-slate-500">-</div>
                                     <div className="col-span-2 text-center text-xs font-bold text-slate-900 bg-slate-100 rounded py-0.5">{log.physicalQty}</div>
                                     <div className={`col-span-1 text-right text-xs font-medium ${log.variance < 0 ? 'text-red-600' : log.variance > 0 ? 'text-blue-600' : 'text-emerald-500'}`}>
-                                        {/* Row variance might be relative to global stock in audit log context, showing simple qty here */}
                                         {log.physicalQty}
                                     </div>
                                 </div>

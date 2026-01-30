@@ -35,12 +35,33 @@ export const LocationChecklist: React.FC<LocationChecklistProps> = ({ onNavigate
     refreshData();
   }, []);
 
-  // Filter Logic
-  const pendingLocations = locations.filter(loc => !locationStates[loc.name]);
-  const completedLocations = locations.filter(loc => locationStates[loc.name]);
+  // Filter Logic:
+  // Pending includes:
+  // 1. Not touched yet (no state)
+  // 2. Marked 'damaged'
+  // 3. Audited but has NOTES or PHOTO (needs review)
+  const pendingLocations = locations.filter(loc => {
+      const state = locationStates[loc.name];
+      if (!state) return true; // Belum diaudit sama sekali
+      
+      const hasIssues = (state.description && state.description.trim() !== '') || state.photoUrl;
+      return hasIssues; // Masuk pending jika ada catatan/foto
+  });
+
+  // Completed includes:
+  // 1. Audited AND No Notes AND No Photo
+  // 2. Empty AND No Notes
+  const completedLocations = locations.filter(loc => {
+      const state = locationStates[loc.name];
+      if (!state) return false;
+      
+      const hasIssues = (state.description && state.description.trim() !== '') || state.photoUrl;
+      return !hasIssues; // Hanya masuk completed jika bersih (tidak ada catatan/foto)
+  });
 
   // Statistics
   const totalLocations = locations.length;
+  // Progress is strictly clean audits vs total
   const completedCount = completedLocations.length;
   const progressPercentage = totalLocations > 0 ? Math.round((completedCount / totalLocations) * 100) : 0;
 
@@ -121,7 +142,7 @@ export const LocationChecklist: React.FC<LocationChecklistProps> = ({ onNavigate
           <div className="flex justify-between items-end mb-2">
               <div>
                   <h2 className="text-sm font-bold text-slate-700 uppercase tracking-wide">Audit Progress</h2>
-                  <p className="text-xs text-slate-500">{completedCount} of {totalLocations} locations visited</p>
+                  <p className="text-xs text-slate-500">{completedCount} of {totalLocations} locations clear</p>
               </div>
               <span className="text-2xl font-black text-primary">{progressPercentage}%</span>
           </div>
@@ -139,13 +160,13 @@ export const LocationChecklist: React.FC<LocationChecklistProps> = ({ onNavigate
           onClick={() => setActiveTab('pending')}
           className={`flex-1 py-3 text-sm font-bold uppercase tracking-wider border-b-2 transition-colors ${activeTab === 'pending' ? 'border-primary text-primary' : 'border-transparent text-slate-400 hover:text-slate-600'}`}
         >
-          Pending ({pendingLocations.length})
+          Pending / Issues ({pendingLocations.length})
         </button>
         <button 
           onClick={() => setActiveTab('completed')}
           className={`flex-1 py-3 text-sm font-bold uppercase tracking-wider border-b-2 transition-colors ${activeTab === 'completed' ? 'border-primary text-primary' : 'border-transparent text-slate-400 hover:text-slate-600'}`}
         >
-          Completed ({completedLocations.length})
+          Clean ({completedLocations.length})
         </button>
       </div>
 
@@ -156,42 +177,54 @@ export const LocationChecklist: React.FC<LocationChecklistProps> = ({ onNavigate
                   {pendingLocations.length === 0 ? (
                       <div className="text-center py-12 text-slate-400 bg-white rounded-xl border border-slate-100">
                           <span className="material-symbols-outlined text-4xl mb-2">check_circle</span>
-                          <p>All locations audited!</p>
+                          <p>All locations audited & clear!</p>
                       </div>
                   ) : (
-                      pendingLocations.map(loc => (
-                          <div key={loc.id} className="bg-white rounded-xl p-4 shadow-sm border border-slate-200 flex flex-col gap-3">
-                              <div className="flex justify-between items-center border-b border-slate-50 pb-2">
-                                  <div>
-                                      <h3 className="font-bold text-slate-800">{loc.name}</h3>
-                                      <span className="text-xs text-slate-500 font-medium bg-slate-100 px-2 py-0.5 rounded">{loc.zone}</span>
-                                  </div>
-                                  <button 
-                                    onClick={() => handleScanLocation(loc.name)}
-                                    className="bg-primary/10 text-primary hover:bg-primary hover:text-white transition-colors px-3 py-1.5 rounded-lg flex items-center gap-1 text-sm font-bold"
-                                  >
-                                      <span className="material-symbols-outlined text-[18px]">qr_code_scanner</span>
-                                      Scan
-                                  </button>
-                              </div>
-                              <div className="flex gap-2">
-                                  <button 
-                                    onClick={() => handleMarkEmpty(loc.name)}
-                                    className="flex-1 py-2 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 text-xs font-bold flex items-center justify-center gap-1 transition-colors"
-                                  >
-                                      <span className="material-symbols-outlined text-[16px]">check_box_outline_blank</span>
-                                      Mark Empty
-                                  </button>
-                                  <button 
-                                    onClick={() => openDamageModal(loc.name)}
-                                    className="flex-1 py-2 rounded-lg border border-red-200 text-red-600 hover:bg-red-50 text-xs font-bold flex items-center justify-center gap-1 transition-colors"
-                                  >
-                                      <span className="material-symbols-outlined text-[16px]">broken_image</span>
-                                      Mark Damaged
-                                  </button>
-                              </div>
-                          </div>
-                      ))
+                      pendingLocations.map(loc => {
+                          const state = locationStates[loc.name];
+                          // Check if it's pending because of an issue
+                          const hasIssue = state && ((state.description && state.description.trim() !== '') || state.photoUrl);
+                          
+                          return (
+                            <div key={loc.id} className={`bg-white rounded-xl p-4 shadow-sm border ${hasIssue ? 'border-red-200 bg-red-50/50' : 'border-slate-200'} flex flex-col gap-3`}>
+                                <div className="flex justify-between items-start border-b border-slate-50 pb-2">
+                                    <div>
+                                        <h3 className="font-bold text-slate-800 flex items-center gap-2">
+                                            {loc.name}
+                                            {hasIssue && <span className="px-1.5 py-0.5 rounded-full bg-red-100 text-red-600 text-[10px] font-bold uppercase">Review Needed</span>}
+                                        </h3>
+                                        <span className="text-xs text-slate-500 font-medium bg-slate-100 px-2 py-0.5 rounded mt-1 inline-block">{loc.zone}</span>
+                                        {state?.description && (
+                                            <p className="text-xs text-red-600 mt-1 italic">"{state.description}"</p>
+                                        )}
+                                    </div>
+                                    <button 
+                                        onClick={() => handleScanLocation(loc.name)}
+                                        className="bg-primary/10 text-primary hover:bg-primary hover:text-white transition-colors px-3 py-1.5 rounded-lg flex items-center gap-1 text-sm font-bold"
+                                    >
+                                        <span className="material-symbols-outlined text-[18px]">qr_code_scanner</span>
+                                        {hasIssue ? 'Re-Audit' : 'Scan'}
+                                    </button>
+                                </div>
+                                <div className="flex gap-2">
+                                    <button 
+                                        onClick={() => handleMarkEmpty(loc.name)}
+                                        className="flex-1 py-2 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 text-xs font-bold flex items-center justify-center gap-1 transition-colors"
+                                    >
+                                        <span className="material-symbols-outlined text-[16px]">check_box_outline_blank</span>
+                                        Mark Empty
+                                    </button>
+                                    <button 
+                                        onClick={() => openDamageModal(loc.name)}
+                                        className="flex-1 py-2 rounded-lg border border-red-200 text-red-600 hover:bg-red-50 text-xs font-bold flex items-center justify-center gap-1 transition-colors"
+                                    >
+                                        <span className="material-symbols-outlined text-[16px]">broken_image</span>
+                                        Report Issue
+                                    </button>
+                                </div>
+                            </div>
+                          );
+                      })
                   )}
               </div>
           )}
@@ -206,13 +239,10 @@ export const LocationChecklist: React.FC<LocationChecklistProps> = ({ onNavigate
                       if (status === 'empty') {
                           statusClass = "bg-slate-100 text-slate-600 border-slate-200";
                           icon = "check_box_outline_blank";
-                      } else if (status === 'damaged') {
-                          statusClass = "bg-red-100 text-red-700 border-red-200";
-                          icon = "broken_image";
                       }
 
                       return (
-                        <div key={loc.id} className={`bg-white rounded-xl p-4 shadow-sm border flex justify-between items-center opacity-75 hover:opacity-100 transition-opacity ${status === 'damaged' ? 'border-red-100' : 'border-slate-100'}`}>
+                        <div key={loc.id} className="bg-white rounded-xl p-4 shadow-sm border border-slate-100 flex justify-between items-center opacity-75 hover:opacity-100 transition-opacity">
                             <div>
                                 <h3 className="font-bold text-slate-700">{loc.name}</h3>
                                 <div className="text-xs text-slate-400 mt-0.5 flex items-center gap-2">
@@ -239,7 +269,7 @@ export const LocationChecklist: React.FC<LocationChecklistProps> = ({ onNavigate
                   <div className="bg-red-600 p-4 text-white flex justify-between items-center">
                       <h3 className="font-bold text-lg flex items-center gap-2">
                           <span className="material-symbols-outlined">broken_image</span>
-                          Report Damage
+                          Report Issue
                       </h3>
                       <button onClick={() => setIsDamageModalOpen(false)} className="hover:bg-red-700 rounded-full p-1">
                           <span className="material-symbols-outlined">close</span>
@@ -255,11 +285,11 @@ export const LocationChecklist: React.FC<LocationChecklistProps> = ({ onNavigate
                       </div>
 
                       <div>
-                          <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Description</label>
+                          <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Description (Catatan)</label>
                           <textarea 
                             value={damageDescription}
                             onChange={(e) => setDamageDescription(e.target.value)}
-                            placeholder="Describe the damage (e.g., Rack bent, water leak, etc.)"
+                            placeholder="Describe the issue (e.g. Broken rack, missing tag, crushed box...)"
                             className="w-full rounded-lg border-slate-300 focus:ring-red-500 focus:border-red-500 text-sm p-3 h-24"
                           ></textarea>
                       </div>

@@ -106,7 +106,14 @@ export const saveMasterData = async (data: MasterItem[]) => {
     for (const chunk of chunks) {
         const batch = writeBatch(db);
         chunk.forEach(item => {
-            const docRef = doc(db, COLLECTIONS.MASTER_DATA, item.sku);
+            // Use composite ID (SKU + Batch + Expiry) to allow multiple rows per SKU (System = Total)
+            // Sanitize string to be safe for ID
+            const safeSku = (item.sku || 'UNKNOWN').replace(/[^a-zA-Z0-9-_]/g, '');
+            const safeBatch = (item.batchNumber || 'NOBATCH').replace(/[^a-zA-Z0-9-_]/g, '');
+            const safeExp = (item.expiryDate || 'NOEXP').replace(/[^a-zA-Z0-9-_]/g, '');
+            
+            const docId = `${safeSku}_${safeBatch}_${safeExp}`;
+            const docRef = doc(db, COLLECTIONS.MASTER_DATA, docId);
             batch.set(docRef, item);
         });
         await batch.commit();
@@ -162,11 +169,19 @@ export const saveAuditLog = async (record: AuditRecord) => {
   const currentLogs = getLocal<AuditRecord[]>(LOCAL_KEYS.AUDIT_LOGS, []);
   setLocal(LOCAL_KEYS.AUDIT_LOGS, [record, ...currentLogs]);
   
-  updateLocationStatusLocal(record.location, 'audited', { teamMember: record.teamMember });
+  // Update location status, including NOTES and PHOTO if available
+  // This ensures items with notes stay in 'Pending' if we filter by description
+  const updateData = { 
+      teamMember: record.teamMember,
+      description: record.notes || undefined,
+      photoUrl: (record.evidencePhotos && record.evidencePhotos.length > 0) ? record.evidencePhotos[0] : undefined
+  };
+
+  updateLocationStatusLocal(record.location, 'audited', updateData);
 
   try {
       await addDoc(collection(db, COLLECTIONS.AUDIT_LOGS), record);
-      await updateLocationStatus(record.location, 'audited', { teamMember: record.teamMember });
+      await updateLocationStatus(record.location, 'audited', updateData);
   } catch (e) {
       console.error("Error saving log to Firestore", e);
   }

@@ -58,11 +58,15 @@ export const AuditForm: React.FC<AuditFormProps> = ({ onSuccess, initialLocation
     if (loadingData) return;
 
     if (sku.length >= 3) {
-      const item = allMasterItems.find(i => i.sku.toLowerCase() === sku.toLowerCase());
+      // Find all matching items to calculate Total System Stock
+      const matchingItems = allMasterItems.filter(i => i.sku.toLowerCase() === sku.toLowerCase());
+      
+      // Use the first match for basic details (Name, etc.)
+      const item = matchingItems.length > 0 ? matchingItems[0] : null;
       setFoundItem(item || null);
 
       if (item) {
-        // AUTO-FILL: Populate Batch and Expiry from Master Data
+        // AUTO-FILL: Populate Batch and Expiry from Master Data (using the first match as default)
         setBatchNumber(item.batchNumber);
         setExpiryDate(item.expiryDate);
         
@@ -93,8 +97,15 @@ export const AuditForm: React.FC<AuditFormProps> = ({ onSuccess, initialLocation
   }, [sku, loadingData, allMasterItems]);
 
   // Derived Values
+  
+  // Calculate System Stock as TOTAL of all batches for this SKU
+  const systemStock = foundItem 
+    ? allMasterItems
+        .filter(i => i.sku.toLowerCase() === sku.toLowerCase())
+        .reduce((sum, i) => sum + i.systemStock, 0)
+    : 0;
+
   const globalTotal = existingTotal + (physicalQty || 0);
-  const systemStock = foundItem ? foundItem.systemStock : 0; 
   const variance = globalTotal - systemStock;
   const activeItemName = foundItem ? foundItem.name : 'Unknown Item (New)';
 
@@ -176,7 +187,7 @@ export const AuditForm: React.FC<AuditFormProps> = ({ onSuccess, initialLocation
       location,
       batchNumber: batchNumber || 'N/A',
       expiryDate: expiryDate || 'N/A',
-      systemQty: systemStock,
+      systemQty: systemStock, // Saves the Aggregate Total System Qty as the snapshot
       physicalQty: physicalQty,
       variance: variance, 
       timestamp: Date.now(),
