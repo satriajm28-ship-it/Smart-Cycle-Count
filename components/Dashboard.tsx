@@ -54,13 +54,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
             const masterMap = new Map<string, MasterItem>();
             masterData.forEach(m => masterMap.set(m.sku, m));
 
-            // Group logs by SKU
+            // Group logs by SKU to calculate Global Counts
             const groups: Record<string, GroupedItem> = {};
 
-            // Initialize groups from Master Data (optional, but good to show missing items)
-            // For now, let's focus on items that have been audited or exist in master
-            
-            // 1. Process Logs
+            // 1. Process Logs to Aggregate Counts
             logs.forEach(log => {
                 if (!groups[log.sku]) {
                     const master = masterMap.get(log.sku);
@@ -69,8 +66,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
                         name: log.itemName,
                         unit: master?.unit || 'Pcs',
                         logs: [],
-                        totalSystem: master?.systemStock || 0, // System stock is global per item usually
-                        totalPhysical: 0,
+                        totalSystem: master?.systemStock || 0, // Master System Stock (Target)
+                        totalPhysical: 0, // Will act as accumulator
                         variance: 0,
                         status: 'matched',
                         locationsCount: 0,
@@ -78,11 +75,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
                     };
                 }
                 groups[log.sku].logs.push(log);
-                groups[log.sku].totalPhysical += log.physicalQty;
-                // Track unique locations per item
+                groups[log.sku].totalPhysical += log.physicalQty; // Summing up: e.g. 6 + 6 + 57 = 69
             });
 
-            // Calculate Variances & Status
+            // Calculate Variances & Status based on Global Totals
             let globalVariance = 0;
             let criticalCount = 0;
             let totalAuditQty = 0;
@@ -140,22 +136,20 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
   }, []);
 
   const handleExportReport = () => {
-    // Flatten data for export with requested headers
+    // Export data matching specific user columns
     const exportRows: any[] = [];
 
     groupedData.forEach(group => {
-        // If an item has multiple logs (locations), we list them as separate rows
-        // If no logs (just master data), we list one row
         if (group.logs.length > 0) {
             group.logs.forEach(log => {
                 exportRows.push({
                     "Kode Barang": group.sku,
                     "Nama Barang": group.name,
                     "Nama Satuan": group.unit,
-                    "Adjustment Inventory": log.physicalQty,
-                    "Warehouse": log.systemQty, // System qty per record usually refers to global system stock context or allocated
-                    "Warehouse Damage & ED": `${log.batchNumber} / ${log.expiryDate}`,
-                    "Total Nama Gudang": log.location
+                    "QTY Fisik": log.physicalQty,
+                    "Team Warehouse": log.teamMember,
+                    "batch & ED": `${log.batchNumber} / ${log.expiryDate}`,
+                    "Lokasi": log.location
                 });
             });
         } else {
@@ -163,10 +157,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
                 "Kode Barang": group.sku,
                 "Nama Barang": group.name,
                 "Nama Satuan": group.unit,
-                "Adjustment Inventory": 0,
-                "Warehouse": group.totalSystem,
-                "Warehouse Damage & ED": `${group.master?.batchNumber || '-'} / ${group.master?.expiryDate || '-'}`,
-                "Total Nama Gudang": "Uncounted"
+                "QTY Fisik": 0,
+                "Team Warehouse": "-",
+                "batch & ED": `${group.master?.batchNumber || '-'} / ${group.master?.expiryDate || '-'}`,
+                "Lokasi": "-"
             });
         }
     });
@@ -174,7 +168,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
     const ws = XLSX.utils.json_to_sheet(exportRows);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "StockOpname_Export");
-    XLSX.writeFile(wb, `StockOpname_Full_${new Date().toISOString().slice(0,10)}.xlsx`);
+    XLSX.writeFile(wb, `StockOpname_Export_${new Date().toISOString().slice(0,10)}.xlsx`);
   };
 
   // Filter View
@@ -374,13 +368,12 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
                          <div className="grid grid-cols-12 gap-2 px-4 py-2 bg-slate-50 text-[10px] font-semibold text-slate-500 uppercase tracking-wider border-b border-slate-100">
                             <div className="col-span-4">Location</div>
                             <div className="col-span-3 text-center">Batch</div>
-                            <div className="col-span-2 text-center">Sys</div>
+                            <div className="col-span-2 text-center">System</div>
                             <div className="col-span-2 text-center">Phys</div>
                             <div className="col-span-1 text-right">Diff</div>
                         </div>
                         {group.logs.map(log => {
-                            const diff = log.physicalQty - log.systemQty; // Approximate diff per location if we assume system qty is distributed? 
-                            // Actually log.variance is stored directly.
+                            // Note: log.systemQty usually carries the global system stock or snapshot
                             const rowColor = log.variance < 0 ? 'bg-red-50/30' : log.variance > 0 ? 'bg-blue-50/30' : '';
                             
                             return (
@@ -396,14 +389,19 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
                                         <span>{log.batchNumber}</span>
                                         <span className="text-[8px] text-slate-400">{log.expiryDate}</span>
                                     </div>
-                                    <div className="col-span-2 text-center text-xs text-slate-500">{log.systemQty}</div>
+                                    <div className="col-span-2 text-center text-xs text-slate-500">-</div>
                                     <div className="col-span-2 text-center text-xs font-bold text-slate-900 bg-slate-100 rounded py-0.5">{log.physicalQty}</div>
                                     <div className={`col-span-1 text-right text-xs font-medium ${log.variance < 0 ? 'text-red-600' : log.variance > 0 ? 'text-blue-600' : 'text-emerald-500'}`}>
-                                        {log.variance}
+                                        {/* Row variance might be relative to global stock in audit log context, showing simple qty here */}
+                                        {log.physicalQty}
                                     </div>
                                 </div>
                             );
                         })}
+                        <div className="px-4 py-2 bg-slate-50 border-t border-slate-100 flex justify-end items-center gap-4 text-xs">
+                             <span className="font-bold text-slate-500">Total Calculation:</span>
+                             <span className="font-mono">{group.logs.map(l => l.physicalQty).join(' + ')} = <span className="text-base font-black text-slate-900">{group.totalPhysical}</span></span>
+                        </div>
                         {group.logs.length === 0 && (
                             <div className="p-4 text-center text-xs text-slate-400 italic">No audit logs yet. System data only.</div>
                         )}
