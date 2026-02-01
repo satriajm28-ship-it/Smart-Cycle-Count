@@ -20,7 +20,6 @@ export const AuditForm: React.FC<AuditFormProps> = ({ onSuccess, initialLocation
   const [location, setLocation] = useState(initialLocation || 'RACK-C-02-B');
   const [physicalQty, setPhysicalQty] = useState<number>(0);
   
-  // Specific Item Details State (Editable but Auto-filled)
   const [batchNumber, setBatchNumber] = useState('');
   const [expiryDate, setExpiryDate] = useState('');
   
@@ -41,13 +40,22 @@ export const AuditForm: React.FC<AuditFormProps> = ({ onSuccess, initialLocation
 
   // Load Master Data
   useEffect(() => {
+    let mounted = true;
     const initData = async () => {
         setLoadingData(true);
-        const items = await getMasterData();
-        setAllMasterItems(items);
-        setLoadingData(false);
+        try {
+            const items = await getMasterData();
+            if (mounted) {
+                setAllMasterItems(items);
+            }
+        } catch (err) {
+            console.error("Failed to load master items", err);
+        } finally {
+            if (mounted) setLoadingData(false);
+        }
     };
     initData();
+    return () => { mounted = false; };
   }, []);
 
   // Clock
@@ -90,7 +98,6 @@ export const AuditForm: React.FC<AuditFormProps> = ({ onSuccess, initialLocation
     }
   }, [sku, loadingData, allMasterItems]);
 
-  // System Stock = TOTAL of all entries for this SKU
   const systemStock = foundItem 
     ? allMasterItems
         .filter(i => i.sku.toLowerCase() === sku.toLowerCase())
@@ -193,9 +200,9 @@ export const AuditForm: React.FC<AuditFormProps> = ({ onSuccess, initialLocation
 
   if (loadingData) {
       return (
-          <div className="flex items-center justify-center min-h-screen text-slate-500 bg-background-light dark:bg-background-dark">
-              <span className="material-symbols-outlined animate-spin text-3xl">sync</span>
-              <span className="ml-2">Updating Database...</span>
+          <div className="flex flex-col items-center justify-center min-h-screen text-slate-500 bg-background-light dark:bg-background-dark">
+              <span className="material-symbols-outlined animate-spin text-4xl mb-2 text-primary">sync</span>
+              <span className="text-sm">Synchronizing Database...</span>
           </div>
       );
   }
@@ -210,21 +217,18 @@ export const AuditForm: React.FC<AuditFormProps> = ({ onSuccess, initialLocation
           title={scannerType === 'sku' ? "Scan Kode Barang" : "Scan Lokasi Rak"}
         />
 
-        {/* NAV */}
         <nav className="sticky top-0 z-20 bg-background-light/95 dark:bg-background-dark/95 backdrop-blur-sm border-b border-slate-200 dark:border-slate-800 px-4 py-3 flex items-center justify-between">
             <button onClick={onSuccess} className="flex items-center justify-center w-10 h-10 rounded-full hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors text-slate-700 dark:text-slate-300">
                 <span className="material-symbols-outlined">arrow_back</span>
             </button>
             <div className="flex flex-col items-center">
                 <h1 className="text-lg font-bold text-slate-900 dark:text-white leading-tight">Stock Opname</h1>
-                <span className="text-[10px] font-medium text-slate-500 dark:text-slate-400 bg-slate-200 dark:bg-slate-800 px-2 py-0.5 rounded-full">Mode Audit Real-Time</span>
+                <span className="text-[10px] font-medium text-slate-500 dark:text-slate-400 bg-slate-200 dark:bg-slate-800 px-2 py-0.5 rounded-full uppercase tracking-tighter">Real-Time Data</span>
             </div>
             <div className="w-10"></div>
         </nav>
 
         <main className="flex-1 flex flex-col px-4 pt-4 pb-36 max-w-lg mx-auto w-full">
-            
-            {/* Timestamp */}
             <div className="flex items-center justify-end mb-6">
                 <div className="flex items-center gap-1.5 px-3 py-1 bg-slate-200 dark:bg-slate-800 rounded-full">
                     <span className="material-symbols-outlined text-[16px] text-slate-500 dark:text-slate-400">schedule</span>
@@ -232,9 +236,8 @@ export const AuditForm: React.FC<AuditFormProps> = ({ onSuccess, initialLocation
                 </div>
             </div>
 
-            {/* Team Section */}
             <section className="mb-6">
-                <h3 className="text-sm font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2 px-1 text-[10px]">Team Pelaksana</h3>
+                <h3 className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2 px-1">Team Pelaksana</h3>
                 <div className="bg-white dark:bg-slate-800 rounded-xl p-3 shadow-sm border border-slate-100 dark:border-slate-700 flex items-center justify-between group">
                     <div className="flex items-center gap-3 overflow-hidden">
                         <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-blue-50 dark:bg-blue-900/30 text-primary">
@@ -252,9 +255,8 @@ export const AuditForm: React.FC<AuditFormProps> = ({ onSuccess, initialLocation
                 </div>
             </section>
 
-            {/* Item Details */}
             <section className="mb-6 space-y-4">
-                <h3 className="text-sm font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2 px-1 text-[10px]">Item Details</h3>
+                <h3 className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2 px-1">Item Details</h3>
                 <div>
                     <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5">Kode Barang (SKU)</label>
                     <div className="relative flex items-center">
@@ -288,7 +290,7 @@ export const AuditForm: React.FC<AuditFormProps> = ({ onSuccess, initialLocation
                                     className="w-full pl-8 pr-2 py-2 rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-900 text-sm font-medium focus:ring-1 focus:ring-primary"
                                     value={batchNumber}
                                     onChange={(e) => setBatchNumber(e.target.value)}
-                                    placeholder="Input Batch"
+                                    placeholder="Batch"
                                 />
                             </div>
                         </div>
@@ -308,9 +310,8 @@ export const AuditForm: React.FC<AuditFormProps> = ({ onSuccess, initialLocation
                 </div>
             </section>
 
-             {/* Entry Lokasi Audit */}
              <section className="mb-6">
-                <h3 className="text-sm font-semibold text-primary uppercase tracking-wider mb-2 px-1 text-[10px] flex items-center gap-1">
+                <h3 className="text-[10px] font-semibold text-primary uppercase tracking-wider mb-2 px-1 flex items-center gap-1">
                     <span className="material-symbols-outlined text-base">add_location_alt</span>
                     Lokasi Rak / Bin
                 </h3>
@@ -333,11 +334,10 @@ export const AuditForm: React.FC<AuditFormProps> = ({ onSuccess, initialLocation
                 </div>
             </section>
 
-            {/* Riwayat Lokasi */}
             {itemHistory.length > 0 && (
                 <section className="mb-6">
                     <div className="flex items-center justify-between mb-2 px-1">
-                        <h3 className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Terinput di Lokasi Lain:</h3>
+                        <h3 className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Laporan dari lokasi lain:</h3>
                         <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300">
                             Sum: {existingTotal} Pcs
                         </span>
@@ -356,20 +356,19 @@ export const AuditForm: React.FC<AuditFormProps> = ({ onSuccess, initialLocation
                 </section>
             )}
 
-            {/* Input Stok Fisik */}
-            <section className="mb-4">
-                <h3 className="text-sm font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2 px-1 text-[10px]">Stok Fisik di Lokasi Ini</h3>
+            <section className="mb-6">
+                <h3 className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2 px-1">Stok Fisik</h3>
                 <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
-                    <div className="p-5">
-                        <div className="flex gap-4">
+                    <div className="p-4">
+                        <div className="flex gap-3 items-center">
                             <button 
                                 onClick={() => handleQtyChange(physicalQty - 1)}
-                                className="w-14 h-14 rounded-xl border border-slate-200 dark:border-slate-600 flex items-center justify-center text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-700 active:scale-95 transition-all"
+                                className="w-10 h-10 rounded-lg border border-slate-200 dark:border-slate-600 flex items-center justify-center text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-700 active:scale-95 transition-all"
                             >
-                                <span className="material-symbols-outlined">remove</span>
+                                <span className="material-symbols-outlined text-lg">remove</span>
                             </button>
                             <input 
-                                className="flex-1 h-14 text-center text-3xl font-bold font-mono text-primary bg-white dark:bg-slate-800 border-2 border-primary rounded-xl focus:ring-4 focus:ring-primary/20 transition-all outline-none" 
+                                className="flex-1 h-10 text-center text-xl font-bold font-mono text-primary bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary transition-all outline-none" 
                                 inputMode="numeric" 
                                 type="number" 
                                 value={physicalQty}
@@ -378,20 +377,20 @@ export const AuditForm: React.FC<AuditFormProps> = ({ onSuccess, initialLocation
                             />
                             <button 
                                 onClick={() => handleQtyChange(physicalQty + 1)}
-                                className="w-14 h-14 rounded-xl bg-primary text-white flex items-center justify-center shadow-lg shadow-primary/30 hover:bg-primary/90 active:scale-95 transition-all"
+                                className="w-10 h-10 rounded-lg bg-primary text-white flex items-center justify-center shadow-md shadow-primary/20 hover:bg-primary/90 active:scale-95 transition-all"
                             >
-                                <span className="material-symbols-outlined">add</span>
+                                <span className="material-symbols-outlined text-lg">add</span>
                             </button>
                         </div>
                     </div>
                     {foundItem && (
-                        <div className={`p-4 ${isSignificant ? 'bg-red-50 dark:bg-red-900/10 border-t border-red-100 dark:border-red-900/30' : 'bg-slate-50 dark:bg-slate-900/50 border-t border-slate-100 dark:border-slate-700'}`}>
+                        <div className={`px-4 py-3 ${isSignificant ? 'bg-red-50 dark:bg-red-900/10 border-t border-red-100 dark:border-red-900/30' : 'bg-slate-50 dark:bg-slate-900/50 border-t border-slate-100 dark:border-slate-700'}`}>
                             <div className="flex items-center justify-between">
                                 <span className={`text-xs font-bold flex items-center gap-1.5 ${isSignificant ? 'text-red-600 dark:text-red-400' : 'text-slate-700 dark:text-slate-300'}`}>
                                     {isSignificant && <span className="material-symbols-outlined text-[18px]">warning</span>}
-                                    Diff vs System ({systemStock})
+                                    Selisih vs System ({systemStock})
                                 </span>
-                                <span className={`text-lg font-mono font-black ${isSignificant ? 'text-red-600 dark:text-red-400' : variance === 0 ? 'text-green-600 dark:text-green-400' : 'text-slate-700 dark:text-slate-300'}`}>
+                                <span className={`text-base font-mono font-black ${isSignificant ? 'text-red-600 dark:text-red-400' : variance === 0 ? 'text-green-600 dark:text-green-400' : 'text-slate-700 dark:text-slate-300'}`}>
                                     {variance > 0 ? '+' : ''}{variance}
                                 </span>
                             </div>
@@ -400,7 +399,6 @@ export const AuditForm: React.FC<AuditFormProps> = ({ onSuccess, initialLocation
                 </div>
             </section>
 
-            {/* Evidence Photos */}
             <section className="mb-6">
                 <div className="flex items-center justify-between mb-2 px-1">
                     <h3 className={`text-[10px] font-semibold uppercase tracking-wider flex items-center gap-1 ${isSignificant ? 'text-red-600 dark:text-red-400' : 'text-slate-500 dark:text-slate-400'}`}>
@@ -428,19 +426,17 @@ export const AuditForm: React.FC<AuditFormProps> = ({ onSuccess, initialLocation
                 </div>
             </section>
 
-            {/* Notes Section */}
             <section className="mb-6">
                 <h3 className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2 px-1">Catatan</h3>
                 <textarea 
                     className="w-full rounded-xl border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-primary focus:border-primary transition-shadow p-3 text-sm placeholder:text-slate-400 min-h-[80px]" 
-                    placeholder="Alasan selisih..."
+                    placeholder="Contoh: Barang rusak, salah rak, dsb..."
                     value={notes}
                     onChange={(e) => setNotes(e.target.value)}
                 ></textarea>
             </section>
         </main>
 
-        {/* Footer Actions */}
         <footer className="fixed bottom-0 left-0 right-0 z-30 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 p-4 pb-8 safe-area-pb">
             <div className="max-w-lg mx-auto flex gap-3">
                 <button 
