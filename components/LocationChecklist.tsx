@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { MasterLocation, AppView } from '../types';
-import { getMasterLocations, getLocationStates, updateLocationStatus } from '../services/storageService';
+import { MasterLocation, AppView, AuditRecord } from '../types';
+import { getMasterLocations, getLocationStates, updateLocationStatus, getAuditLogs } from '../services/storageService';
 import { ScannerModal } from './ScannerModal';
 
 interface LocationChecklistProps {
@@ -11,6 +11,7 @@ interface LocationChecklistProps {
 export const LocationChecklist: React.FC<LocationChecklistProps> = ({ onNavigate }) => {
   const [locations, setLocations] = useState<MasterLocation[]>([]);
   const [locationStates, setLocationStates] = useState<Record<string, any>>({});
+  const [logs, setLogs] = useState<AuditRecord[]>([]);
   const [activeTab, setActiveTab] = useState<'pending' | 'completed'>('pending');
   const [loading, setLoading] = useState(true);
 
@@ -26,12 +27,14 @@ export const LocationChecklist: React.FC<LocationChecklistProps> = ({ onNavigate
 
   const refreshData = async () => {
       setLoading(true);
-      const [locs, states] = await Promise.all([
+      const [locs, states, auditLogs] = await Promise.all([
           getMasterLocations(),
-          getLocationStates()
+          getLocationStates(),
+          getAuditLogs()
       ]);
       setLocations(locs);
       setLocationStates(states);
+      setLogs(auditLogs);
       setLoading(false);
   };
 
@@ -47,35 +50,56 @@ export const LocationChecklist: React.FC<LocationChecklistProps> = ({ onNavigate
       return locationStates[name] || locationStates[name.toUpperCase()] || locationStates[name.trim()];
   };
 
+  // Helper to get variance/stats for a location
+  const getLocationStats = (locName: string) => {
+      const normLoc = locName.toLowerCase().trim();
+      const locLogs = logs.filter(l => l.location.toLowerCase().trim() === normLoc);
+      
+      if (locLogs.length === 0) return null;
+
+      const totalVariance = locLogs.reduce((acc, l) => acc + l.variance, 0);
+      const hasVariance = locLogs.some(l => l.variance !== 0);
+      
+      return { hasVariance, totalVariance, count: locLogs.length };
+  };
+
   const pendingLocations = locations.filter(loc => {
       const state = getState(loc.name);
+      const stats = getLocationStats(loc.name);
       
-      // 1. Belum pernah disentuh sama sekali (Implicit Pending) -> Masuk Tab Pending
+      // 1. Belum pernah disentuh sama sekali (Implicit Pending) -> Masuk Tab Masalah
       if (!state) return true;
       
-      // 2. Status secara eksplisit 'pending' -> Masuk Tab Pending
+      // 2. Status secara eksplisit 'pending' -> Masuk Tab Masalah
       if (state.status === 'pending') return true;
       
-      // 3. Status 'damaged' (Ada Masalah) -> Masuk Tab Pending (Prioritas Masalah)
+      // 3. Status 'damaged' (Ada Masalah) -> Masuk Tab Masalah
       if (state.status === 'damaged') return true;
 
-      // Sisanya (audited/empty) tidak masuk sini
+      // 4. Status 'audited' TAPI ada selisih (Variance) -> Masuk Tab Masalah
+      if (state.status === 'audited' && stats?.hasVariance) return true;
+
+      // Sisanya (audited bersih / empty) tidak masuk sini
       return false;
   });
 
   const completedLocations = locations.filter(loc => {
       const state = getState(loc.name);
+      const stats = getLocationStats(loc.name);
       if (!state) return false;
       
-      // 4. Status Selesai (Audited atau Empty) DAN bukan Damaged
-      const isFinished = state.status === 'audited' || state.status === 'empty';
-      const isDamaged = state.status === 'damaged';
-      
-      return isFinished && !isDamaged;
+      // Exclude items that are in the Pending/Issue list
+      if (state.status === 'damaged') return false;
+      if (state.status === 'pending') return false;
+      if (state.status === 'audited' && stats?.hasVariance) return false;
+
+      // Include Empty or Audited Clean
+      return state.status === 'empty' || (state.status === 'audited' && !stats?.hasVariance);
   });
 
   const totalLocations = locations.length;
   const completedCount = completedLocations.length;
+  // Progress only counts "Clean" audits
   const progressPercentage = totalLocations > 0 ? Math.round((completedCount / totalLocations) * 100) : 0;
 
   // --- Handlers ---
@@ -159,7 +183,7 @@ export const LocationChecklist: React.FC<LocationChecklistProps> = ({ onNavigate
       <div className="px-4 py-4 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800">
           <div className="flex justify-between items-end mb-2">
               <div>
-                  <h2 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Progres Audit</h2>
+                  <h2 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Progres Audit (Clean)</h2>
                   <p className="text-xs text-slate-400 dark:text-slate-500">{completedCount} dari {totalLocations} selesai</p>
               </div>
               <span className="text-xl font-black text-primary">{progressPercentage}%</span>
@@ -184,7 +208,7 @@ export const LocationChecklist: React.FC<LocationChecklistProps> = ({ onNavigate
           onClick={() => setActiveTab('completed')}
           className={`flex-1 py-3 text-[10px] font-bold uppercase tracking-widest border-b-2 transition-colors ${activeTab === 'completed' ? 'border-primary text-primary' : 'border-transparent text-slate-400 hover:text-slate-600'}`}
         >
-          Selesai ({completedLocations.length})
+          Selesai / Bersih ({completedLocations.length})
         </button>
       </div>
 
@@ -195,20 +219,41 @@ export const LocationChecklist: React.FC<LocationChecklistProps> = ({ onNavigate
                   {pendingLocations.length === 0 ? (
                       <div className="text-center py-12 text-slate-400 bg-white dark:bg-slate-900 rounded-xl border border-slate-100 dark:border-slate-800 shadow-sm">
                           <span className="material-symbols-outlined text-4xl mb-2 text-emerald-500">check_circle</span>
-                          <p className="text-sm">Audit Lokasi Selesai & Bersih!</p>
+                          <p className="text-sm">Semua Lokasi Aman & Selesai!</p>
                       </div>
                   ) : (
                       pendingLocations.map(loc => {
                           const state = getState(loc.name);
+                          const stats = getLocationStats(loc.name);
+                          
                           const isDamaged = state?.status === 'damaged';
+                          const hasVariance = state?.status === 'audited' && stats?.hasVariance;
+                          const isPending = !state || state?.status === 'pending';
+                          
+                          let borderClass = 'border-slate-200 dark:border-slate-800';
+                          let bgClass = 'bg-white dark:bg-slate-900';
+                          
+                          if (isDamaged) {
+                              borderClass = 'border-red-200 dark:border-red-900/50';
+                              bgClass = 'bg-red-50/20';
+                          } else if (hasVariance) {
+                              borderClass = 'border-amber-200 dark:border-amber-900/50';
+                              bgClass = 'bg-amber-50/20';
+                          }
                           
                           return (
-                            <div key={loc.id} className={`bg-white dark:bg-slate-900 rounded-xl p-4 shadow-sm border ${isDamaged ? 'border-red-200 dark:border-red-900/50 bg-red-50/20' : 'border-slate-200 dark:border-slate-800'} flex flex-col gap-3 transition-all`}>
+                            <div key={loc.id} className={`${bgClass} rounded-xl p-4 shadow-sm border ${borderClass} flex flex-col gap-3 transition-all`}>
                                 <div className="flex justify-between items-start border-b border-slate-50 dark:border-slate-800 pb-2">
                                     <div className="min-w-0 flex-1">
-                                        <h3 className="font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+                                        <h3 className="font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2 flex-wrap">
                                             {loc.name}
-                                            {isDamaged && <span className="flex-shrink-0 px-1.5 py-0.5 rounded-full bg-red-100 text-red-600 text-[8px] font-bold uppercase tracking-tighter">Ada Masalah</span>}
+                                            {isDamaged && <span className="flex-shrink-0 px-2 py-0.5 rounded-full bg-red-100 text-red-600 text-[8px] font-bold uppercase tracking-tighter">Rusak / Masalah</span>}
+                                            {hasVariance && (
+                                                <span className={`flex-shrink-0 px-2 py-0.5 rounded-full text-[8px] font-bold uppercase tracking-tighter ${stats!.totalVariance > 0 ? 'bg-blue-100 text-blue-700' : 'bg-amber-100 text-amber-700'}`}>
+                                                   {stats!.totalVariance > 0 ? `Plus (+${stats!.totalVariance})` : `Selisih (${stats!.totalVariance})`}
+                                                </span>
+                                            )}
+                                            {isPending && <span className="flex-shrink-0 px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 text-[8px] font-bold uppercase tracking-tighter">Belum Cek</span>}
                                         </h3>
                                         <span className="text-[10px] text-slate-400 font-medium bg-slate-50 dark:bg-slate-800 px-2 py-0.5 rounded mt-1 inline-block uppercase">{loc.zone}</span>
                                         {state?.description && (
@@ -268,7 +313,7 @@ export const LocationChecklist: React.FC<LocationChecklistProps> = ({ onNavigate
                             </div>
                             <div className={`px-3 py-1.5 rounded-lg border flex items-center gap-1.5 text-[8px] font-bold uppercase tracking-widest ${statusClass}`}>
                                 <span className="material-symbols-outlined text-[14px]">{icon}</span>
-                                {status === 'audited' ? 'SUDAH CEK' : 'KOSONG'}
+                                {status === 'audited' ? 'OK / BERSIH' : 'KOSONG'}
                             </div>
                         </div>
                       );

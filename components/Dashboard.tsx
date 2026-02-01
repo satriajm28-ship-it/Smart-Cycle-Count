@@ -34,6 +34,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
   const [loading, setLoading] = useState(true);
   const [errorStatus, setErrorStatus] = useState<string | null>(null);
   
+  // Team State
+  const [teamName, setTeamName] = useState(() => localStorage.getItem('team_member_name') || '');
+
   // Edit State
   const [editingLog, setEditingLog] = useState<AuditRecord | null>(null);
   const [editForm, setEditForm] = useState({
@@ -248,6 +251,11 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
     XLSX.writeFile(wb, `Audit_Report_${new Date().toISOString().slice(0,10)}.xlsx`);
   };
 
+  const handleTeamNameChange = (val: string) => {
+      setTeamName(val);
+      localStorage.setItem('team_member_name', val);
+  };
+
   const filteredGroups = groupedData.filter(g => {
       const matchSearch = g.name.toLowerCase().includes(searchQuery.toLowerCase()) || g.sku.toLowerCase().includes(searchQuery.toLowerCase());
       const matchFilter = activeFilter === 'all' ? true : g.status === activeFilter;
@@ -373,7 +381,27 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
         <button onClick={handleExportReport} className="p-2 rounded-full text-green-600 hover:bg-green-50"><span className="material-symbols-outlined">ios_share</span></button>
       </header>
 
-      <section className="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 px-4 py-4 space-y-4 shadow-sm z-30 relative">
+      {/* TEAM INPUT SECTION */}
+      <section className="px-4 pt-4">
+          <div className="bg-white dark:bg-slate-800 rounded-xl p-3 shadow-sm border border-slate-200 dark:border-slate-700 flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-blue-50 dark:bg-blue-900/30 flex items-center justify-center text-primary">
+                  <span className="material-symbols-outlined">badge</span>
+              </div>
+              <div className="flex-1">
+                  <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">Team Pelaksana</label>
+                  <input 
+                      type="text" 
+                      value={teamName}
+                      onChange={(e) => handleTeamNameChange(e.target.value)}
+                      className="w-full bg-transparent border-none p-0 text-sm font-bold text-slate-900 dark:text-white focus:ring-0 placeholder-slate-400"
+                      placeholder="Nama Tim / Petugas"
+                  />
+              </div>
+              <span className="material-symbols-outlined text-slate-300">edit</span>
+          </div>
+      </section>
+
+      <section className="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 px-4 py-4 space-y-4 shadow-sm z-30 relative mt-4">
         <div className="flex items-center justify-between">
             <div className="flex items-center gap-2 flex-1">
                 <span className="material-symbols-outlined text-slate-500 text-[20px]">search</span>
@@ -441,6 +469,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
                                         {log.location}
                                     </p>
                                     <p className="text-[10px] text-slate-400 ml-5">Batch: {log.batchNumber} • Exp: {log.expiryDate}</p>
+                                    <p className="text-[10px] text-slate-400 ml-5 flex items-center gap-1">
+                                        <span className="material-symbols-outlined text-[10px]">badge</span>
+                                        {log.teamMember}
+                                    </p>
                                 </div>
                                 
                                 <div className="flex items-center gap-3">

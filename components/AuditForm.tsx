@@ -23,7 +23,9 @@ export const AuditForm: React.FC<AuditFormProps> = ({ onSuccess, initialLocation
   const [batchNumber, setBatchNumber] = useState('');
   const [expiryDate, setExpiryDate] = useState('');
   
-  const [teamName, setTeamName] = useState('Tim Gudang A - Shift 2');
+  // Initialize team name from localStorage or default
+  const [teamName, setTeamName] = useState(() => localStorage.getItem('team_member_name') || 'Tim Gudang A - Shift 2');
+  
   const [notes, setNotes] = useState('');
   const [evidencePhotos, setEvidencePhotos] = useState<string[]>([]);
   
@@ -40,6 +42,11 @@ export const AuditForm: React.FC<AuditFormProps> = ({ onSuccess, initialLocation
   
   // Ref to hold scanned values temporarily to prevent Master Data from overwriting them
   const scannedOverrides = useRef<{ batch?: string; expiry?: string }>({});
+
+  // Sync team name changes to local storage
+  useEffect(() => {
+      if (teamName) localStorage.setItem('team_member_name', teamName);
+  }, [teamName]);
 
   // Load Master Data
   useEffect(() => {
