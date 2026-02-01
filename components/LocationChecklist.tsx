@@ -39,30 +39,38 @@ export const LocationChecklist: React.FC<LocationChecklistProps> = ({ onNavigate
     refreshData();
   }, []);
 
-  // LOGIC FIX:
-  // Pending = Not Audited Yet (no state or status='pending') OR Damaged (has issues)
-  // Completed = Audited OR Marked Empty (and not damaged)
+  // --- FILTER LOGIC FIXED ---
   
+  // Helper to safely find state regardless of casing (e.g. "Rack A" vs "RACK A")
+  const getState = (name: string) => {
+      if (!name) return undefined;
+      return locationStates[name] || locationStates[name.toUpperCase()] || locationStates[name.trim()];
+  };
+
   const pendingLocations = locations.filter(loc => {
-      const state = locationStates[loc.name];
-      // If no state exists, it is definitely pending
+      const state = getState(loc.name);
+      
+      // 1. Belum pernah disentuh sama sekali (Implicit Pending) -> Masuk Tab Pending
       if (!state) return true;
       
-      const isDamaged = (state.description && state.description.trim() !== '') || state.photoUrl || state.status === 'damaged';
-      const isPending = state.status === 'pending';
+      // 2. Status secara eksplisit 'pending' -> Masuk Tab Pending
+      if (state.status === 'pending') return true;
       
-      // Show in Pending tab if it's damaged OR simply hasn't been audited/marked empty yet
-      return isDamaged || isPending;
+      // 3. Status 'damaged' (Ada Masalah) -> Masuk Tab Pending (Prioritas Masalah)
+      if (state.status === 'damaged') return true;
+
+      // Sisanya (audited/empty) tidak masuk sini
+      return false;
   });
 
   const completedLocations = locations.filter(loc => {
-      const state = locationStates[loc.name];
+      const state = getState(loc.name);
       if (!state) return false;
       
-      const isDamaged = (state.description && state.description.trim() !== '') || state.photoUrl || state.status === 'damaged';
+      // 4. Status Selesai (Audited atau Empty) DAN bukan Damaged
       const isFinished = state.status === 'audited' || state.status === 'empty';
+      const isDamaged = state.status === 'damaged';
       
-      // Show in Completed tab only if it's finished AND has no active damage report
       return isFinished && !isDamaged;
   });
 
@@ -191,16 +199,16 @@ export const LocationChecklist: React.FC<LocationChecklistProps> = ({ onNavigate
                       </div>
                   ) : (
                       pendingLocations.map(loc => {
-                          const state = locationStates[loc.name];
-                          const hasIssue = state && ((state.description && state.description.trim() !== '') || state.photoUrl || state.status === 'damaged');
+                          const state = getState(loc.name);
+                          const isDamaged = state?.status === 'damaged';
                           
                           return (
-                            <div key={loc.id} className={`bg-white dark:bg-slate-900 rounded-xl p-4 shadow-sm border ${hasIssue ? 'border-red-200 dark:border-red-900/50 bg-red-50/20' : 'border-slate-200 dark:border-slate-800'} flex flex-col gap-3 transition-all`}>
+                            <div key={loc.id} className={`bg-white dark:bg-slate-900 rounded-xl p-4 shadow-sm border ${isDamaged ? 'border-red-200 dark:border-red-900/50 bg-red-50/20' : 'border-slate-200 dark:border-slate-800'} flex flex-col gap-3 transition-all`}>
                                 <div className="flex justify-between items-start border-b border-slate-50 dark:border-slate-800 pb-2">
                                     <div className="min-w-0 flex-1">
                                         <h3 className="font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
                                             {loc.name}
-                                            {hasIssue && <span className="flex-shrink-0 px-1.5 py-0.5 rounded-full bg-red-100 text-red-600 text-[8px] font-bold uppercase tracking-tighter">Ada Masalah</span>}
+                                            {isDamaged && <span className="flex-shrink-0 px-1.5 py-0.5 rounded-full bg-red-100 text-red-600 text-[8px] font-bold uppercase tracking-tighter">Ada Masalah</span>}
                                         </h3>
                                         <span className="text-[10px] text-slate-400 font-medium bg-slate-50 dark:bg-slate-800 px-2 py-0.5 rounded mt-1 inline-block uppercase">{loc.zone}</span>
                                         {state?.description && (
@@ -238,7 +246,8 @@ export const LocationChecklist: React.FC<LocationChecklistProps> = ({ onNavigate
           {activeTab === 'completed' && (
               <div className="flex flex-col gap-3">
                   {completedLocations.map(loc => {
-                      const status = locationStates[loc.name]?.status;
+                      const state = getState(loc.name);
+                      const status = state?.status;
                       let statusClass = "bg-green-100 dark:bg-green-900/20 text-green-700 dark:text-green-400 border-green-200 dark:border-green-900/50";
                       let icon = "check_circle";
 
@@ -254,7 +263,7 @@ export const LocationChecklist: React.FC<LocationChecklistProps> = ({ onNavigate
                                 <div className="text-[10px] text-slate-400 mt-0.5 flex items-center gap-2">
                                     <span className="uppercase">{loc.zone}</span>
                                     <span>•</span>
-                                    <span className="text-[8px]">{new Date(locationStates[loc.name]?.timestamp).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</span>
+                                    <span className="text-[8px]">{state?.timestamp ? new Date(state.timestamp).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) : '-'}</span>
                                 </div>
                             </div>
                             <div className={`px-3 py-1.5 rounded-lg border flex items-center gap-1.5 text-[8px] font-bold uppercase tracking-widest ${statusClass}`}>
