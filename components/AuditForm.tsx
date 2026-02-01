@@ -37,6 +37,9 @@ export const AuditForm: React.FC<AuditFormProps> = ({ onSuccess, initialLocation
 
   const [timestamp, setTimestamp] = useState(new Date());
   const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  // Ref to hold scanned values temporarily to prevent Master Data from overwriting them
+  const scannedOverrides = useRef<{ batch?: string; expiry?: string }>({});
 
   // Load Master Data
   useEffect(() => {
@@ -74,8 +77,21 @@ export const AuditForm: React.FC<AuditFormProps> = ({ onSuccess, initialLocation
       setFoundItem(item || null);
 
       if (item) {
-        setBatchNumber(item.batchNumber);
-        setExpiryDate(item.expiryDate);
+        // PRIORITY LOGIC:
+        // 1. Use values from the specific CSV scan if they exist (scannedOverrides).
+        // 2. If not, use the default values from Master Data.
+        
+        if (scannedOverrides.current.batch) {
+            setBatchNumber(scannedOverrides.current.batch);
+        } else {
+            setBatchNumber(item.batchNumber);
+        }
+
+        if (scannedOverrides.current.expiry) {
+            setExpiryDate(scannedOverrides.current.expiry);
+        } else {
+            setExpiryDate(item.expiryDate);
+        }
         
         const fetchHistory = async () => {
             const allLogs = await getAuditLogs();
@@ -85,11 +101,22 @@ export const AuditForm: React.FC<AuditFormProps> = ({ onSuccess, initialLocation
             setExistingTotal(total);
         };
         fetchHistory();
+
+        // Clear overrides after applying
+        scannedOverrides.current = {};
+
       } else {
         setItemHistory([]);
         setExistingTotal(0);
-        if (!batchNumber) setBatchNumber('');
-        if (!expiryDate) setExpiryDate('');
+        
+        // Even if item is not found in Master Data, respect the scanned values
+        if (scannedOverrides.current.batch) setBatchNumber(scannedOverrides.current.batch);
+        else if (!batchNumber) setBatchNumber('');
+
+        if (scannedOverrides.current.expiry) setExpiryDate(scannedOverrides.current.expiry);
+        else if (!expiryDate) setExpiryDate('');
+        
+        scannedOverrides.current = {};
       }
     } else {
       setFoundItem(null);
@@ -115,19 +142,34 @@ export const AuditForm: React.FC<AuditFormProps> = ({ onSuccess, initialLocation
   const isSignificant = systemStock > 0 && percentDiff > 10;
 
   const handleSkuInput = (val: string) => {
+    // Format: SKU,BATCH,DDMMYYYY
     if (val.includes(',')) {
         const parts = val.split(',');
-        if (parts.length >= 1) setSku(parts[0].trim());
-        if (parts.length >= 2) setBatchNumber(parts[1].trim());
+        
+        // 1. Parse SKU
+        if (parts.length >= 1) {
+            setSku(parts[0].trim());
+        }
+        
+        // 2. Parse Batch
+        if (parts.length >= 2) {
+            const b = parts[1].trim();
+            setBatchNumber(b);
+            scannedOverrides.current.batch = b;
+        }
+        
+        // 3. Parse Date (DDMMYYYY -> YYYY-MM-DD)
         if (parts.length >= 3) {
             let rawDate = parts[2].trim();
+            // Expecting DDMMYYYY (e.g., 31082028)
             if (rawDate.length === 8 && !rawDate.includes('-')) {
-                const year = rawDate.substring(0, 4);
-                const month = rawDate.substring(4, 6);
-                const day = rawDate.substring(6, 8);
+                const day = rawDate.substring(0, 2);
+                const month = rawDate.substring(2, 4);
+                const year = rawDate.substring(4, 8);
                 rawDate = `${year}-${month}-${day}`;
             }
             setExpiryDate(rawDate);
+            scannedOverrides.current.expiry = rawDate;
         }
         return;
     }
