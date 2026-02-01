@@ -15,55 +15,76 @@ export const ScannerModal: React.FC<ScannerModalProps> = ({ isOpen, onClose, onS
   const scannerId = "reader-stream";
 
   useEffect(() => {
+    let isMounted = true;
+
     if (isOpen) {
       setError(null);
-      // Initialize scanner
-      const scanner = new Html5Qrcode(scannerId);
-      scannerRef.current = scanner;
+      
+      // Small timeout to ensure DOM element is rendered and ready
+      const initScanner = async () => {
+          try {
+              // Safety clean up if exists
+              if (scannerRef.current) {
+                  try {
+                      await scannerRef.current.stop();
+                  } catch (e) {
+                      // ignore stop errors on re-init
+                  }
+                  scannerRef.current.clear();
+              }
 
-      const config = { 
-        fps: 10, 
-        qrbox: { width: 250, height: 250 },
-        aspectRatio: 1.0 
+              const scanner = new Html5Qrcode(scannerId);
+              scannerRef.current = scanner;
+
+              const config = { 
+                fps: 10, 
+                qrbox: { width: 250, height: 250 },
+                aspectRatio: 1.0 
+              };
+
+              await scanner.start(
+                { facingMode: "environment" }, 
+                config,
+                (decodedText) => {
+                  if (isMounted) {
+                    onScanSuccess(decodedText);
+                  }
+                },
+                (errorMessage) => {
+                  // ignore frame errors
+                }
+              );
+          } catch (err: any) {
+              console.error("Scanner Error:", err);
+              if (isMounted) {
+                  let msg = "Gagal akses kamera.";
+                  if (err?.name === 'NotAllowedError' || err?.message?.includes('Permission denied')) {
+                      msg = "Izin kamera ditolak. Mohon aktifkan izin kamera di pengaturan browser Anda.";
+                  } else if (err?.name === 'NotFoundError') {
+                      msg = "Kamera tidak ditemukan pada perangkat ini.";
+                  } else if (err?.name === 'NotReadableError') {
+                      msg = "Kamera sedang digunakan oleh aplikasi lain.";
+                  }
+                  setError(msg);
+              }
+          }
       };
 
-      // Start scanning automatically
-      scanner.start(
-        { facingMode: "environment" }, // Prefer back camera
-        config,
-        (decodedText) => {
-          // Success callback
-          onScanSuccess(decodedText);
-          handleClose();
-        },
-        (errorMessage) => {
-          // Ignore frame parse errors (very common while scanning)
-        }
-      ).catch((err) => {
-        console.error("Error starting scanner", err);
-        setError("Gagal akses kamera. Pastikan izin diberikan.");
-      });
+      // Execute with slight delay
+      const timer = setTimeout(initScanner, 300);
 
       return () => {
-        handleClose();
+        isMounted = false;
+        clearTimeout(timer);
+        if (scannerRef.current) {
+            // Stop silently
+            scannerRef.current.stop().then(() => {
+                scannerRef.current?.clear();
+            }).catch(e => console.debug("Stop ignored", e));
+        }
       };
     }
-  }, [isOpen]);
-
-  const handleClose = async () => {
-    if (scannerRef.current) {
-        try {
-            if (scannerRef.current.isScanning) {
-                await scannerRef.current.stop();
-            }
-            scannerRef.current.clear();
-        } catch (e) {
-            console.warn("Scanner stop error", e);
-        }
-        scannerRef.current = null;
-    }
-    onClose();
-  };
+  }, [isOpen, onScanSuccess]);
 
   if (!isOpen) return null;
 
@@ -78,7 +99,7 @@ export const ScannerModal: React.FC<ScannerModalProps> = ({ isOpen, onClose, onS
             {title}
           </h3>
           <button 
-            onClick={() => handleClose()} 
+            onClick={onClose} 
             className="bg-black/40 hover:bg-black/60 text-white rounded-full p-1.5 backdrop-blur-md transition-colors"
           >
             <span className="material-symbols-outlined text-lg">close</span>
@@ -103,10 +124,13 @@ export const ScannerModal: React.FC<ScannerModalProps> = ({ isOpen, onClose, onS
             </div>
 
             {error && (
-                <div className="absolute inset-0 flex items-center justify-center bg-slate-900 text-white p-6 text-center">
+                <div className="absolute inset-0 flex items-center justify-center bg-slate-900/90 text-white p-6 text-center z-20">
                     <div>
                         <span className="material-symbols-outlined text-4xl text-red-500 mb-2">videocam_off</span>
-                        <p className="text-sm">{error}</p>
+                        <p className="text-sm font-medium">{error}</p>
+                        <button onClick={onClose} className="mt-4 px-4 py-2 bg-white/10 rounded-full text-xs hover:bg-white/20">
+                            Tutup
+                        </button>
                     </div>
                 </div>
             )}
