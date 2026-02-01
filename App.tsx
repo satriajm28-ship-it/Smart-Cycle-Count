@@ -6,8 +6,11 @@ import { Dashboard } from './components/Dashboard';
 import { MasterData } from './components/MasterData';
 import { DamagedReport } from './components/DamagedReport';
 import { auth } from './services/firebaseConfig';
-import { onAuthStateChanged, signInAnonymously } from 'firebase/auth';
+// Using namespace import and casting to handle potential v8/v9 type definition mismatches
+import * as firebaseAuth from 'firebase/auth';
 import { setPermissionErrorHandler, syncOfflineQueue, getOfflineQueueCount } from './services/storageService';
+
+const { onAuthStateChanged, signInAnonymously } = firebaseAuth as any;
 
 const App: React.FC = () => {
   const [view, setView] = useState<AppView>(AppView.DASHBOARD);
@@ -31,14 +34,14 @@ const App: React.FC = () => {
     });
 
     // Listen for auth state changes
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
+    const unsubscribe = onAuthStateChanged(auth, (user: any) => {
       if (user) {
         if (mounted) setIsAuthenticated(true);
         // Attempt sync on load if user is authenticated
         triggerSync();
       } else {
         signInAnonymously(auth)
-            .catch((error) => {
+            .catch((error: any) => {
                 console.warn("Auth check failed:", error.message);
                 if (mounted) {
                     setIsAuthenticated(true); 
@@ -127,13 +130,10 @@ const App: React.FC = () => {
             </div>
         )}
 
-        {/* WATERMARK */}
-        <div className="fixed bottom-20 left-0 right-0 flex justify-center pointer-events-none z-0">
-            <div className="bg-slate-200/50 dark:bg-slate-800/50 px-3 py-1 rounded-full backdrop-blur-[2px]">
-                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-600">
-                    Version Beta <span className="mx-1 text-slate-300">•</span> powered by Satria JM
-                </p>
-            </div>
+        {/* WATERMARK - Positioned at Bottom Center */}
+        <div className="fixed bottom-1 left-0 right-0 z-[120] pointer-events-none flex flex-col items-center justify-center opacity-40 select-none pb-[env(safe-area-inset-bottom)]">
+             <span className="text-[8px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest drop-shadow-sm leading-tight">Version Beta</span>
+             <span className="text-[7px] font-bold text-slate-400 dark:text-slate-500 italic leading-tight">powered by Satria JM</span>
         </div>
 
         {/* Setup Helper Modal */}

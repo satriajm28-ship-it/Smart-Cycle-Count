@@ -1,7 +1,14 @@
+import { Firestore } from "firebase/firestore";
 
-import { initializeApp } from "firebase/app";
-import { getFirestore } from "firebase/firestore";
-import { getAuth } from "firebase/auth";
+// Workaround for potential type definition mismatches where named exports are not recognized
+// We import the namespaces and cast them to any to access the v9 modular functions at runtime
+import * as firebaseApp from "firebase/app";
+import * as firebaseFirestore from "firebase/firestore";
+import * as firebaseAuth from "firebase/auth";
+
+const initializeApp = (firebaseApp as any).initializeApp;
+const getFirestore = (firebaseFirestore as any).getFirestore;
+const getAuth = (firebaseAuth as any).getAuth;
 
 /**
  * FIREBASE SECURITY RULES (Copy & Paste to Firebase Console -> Firestore -> Rules):
@@ -29,5 +36,5 @@ const firebaseConfig = {
 };
 
 const app = initializeApp(firebaseConfig);
-export const db = getFirestore(app);
+export const db = getFirestore(app) as Firestore;
 export const auth = getAuth(app);
