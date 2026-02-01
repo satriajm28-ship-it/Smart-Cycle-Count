@@ -4,11 +4,10 @@ import { AppView } from './types';
 import { AuditForm } from './components/AuditForm';
 import { Dashboard } from './components/Dashboard';
 import { MasterData } from './components/MasterData';
-import { LocationChecklist } from './components/LocationChecklist';
 import { DamagedReport } from './components/DamagedReport';
 import { auth } from './services/firebaseConfig';
 import { onAuthStateChanged, signInAnonymously } from 'firebase/auth';
-import { setPermissionErrorHandler } from './services/storageService';
+import { setPermissionErrorHandler, syncOfflineQueue, getOfflineQueueCount } from './services/storageService';
 
 const App: React.FC = () => {
   const [view, setView] = useState<AppView>(AppView.DASHBOARD);
@@ -16,6 +15,10 @@ const App: React.FC = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [hasPermissionError, setHasPermissionError] = useState(false);
   const [showSetupHelper, setShowSetupHelper] = useState(false);
+  
+  // Sync State
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [pendingCount, setPendingCount] = useState(0);
 
   useEffect(() => {
     let mounted = true;
@@ -31,6 +34,8 @@ const App: React.FC = () => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (user) {
         if (mounted) setIsAuthenticated(true);
+        // Attempt sync on load if user is authenticated
+        triggerSync();
       } else {
         signInAnonymously(auth)
             .catch((error) => {
@@ -44,11 +49,35 @@ const App: React.FC = () => {
             });
       }
     });
+    
+    // Online/Offline Listeners
+    const handleOnline = () => {
+        console.log("Device is online. Triggering sync...");
+        triggerSync();
+    };
+    
+    window.addEventListener('online', handleOnline);
+    setPendingCount(getOfflineQueueCount());
+
     return () => {
         mounted = false;
         unsubscribe();
+        window.removeEventListener('online', handleOnline);
     };
   }, []);
+
+  const triggerSync = async () => {
+      const count = getOfflineQueueCount();
+      if (count > 0) {
+          setIsSyncing(true);
+          setPendingCount(count);
+          await syncOfflineQueue((remaining) => {
+              setPendingCount(remaining);
+          });
+          setIsSyncing(false);
+          setPendingCount(getOfflineQueueCount());
+      }
+  };
 
   const navigate = (newView: AppView, params?: any) => {
     setNavParams(params);
@@ -77,6 +106,24 @@ const App: React.FC = () => {
                 >
                     Fix Permissions
                 </button>
+            </div>
+        )}
+
+        {/* Sync Indicator */}
+        {(isSyncing || pendingCount > 0) && !hasPermissionError && (
+            <div className={`px-4 py-1 text-[10px] font-bold text-center sticky top-0 z-[90] flex items-center justify-center gap-2 shadow-sm transition-colors ${isSyncing ? 'bg-blue-600 text-white' : 'bg-slate-200 text-slate-600'}`}>
+                {isSyncing ? (
+                    <>
+                        <span className="material-symbols-outlined text-sm animate-spin">sync</span>
+                        <span>Syncing {pendingCount} offline records to cloud...</span>
+                    </>
+                ) : (
+                    <>
+                        <span className="material-symbols-outlined text-sm">cloud_off</span>
+                        <span>{pendingCount} records pending upload (waiting for connection)</span>
+                        <button onClick={triggerSync} className="ml-2 underline hover:text-slate-900">Retry</button>
+                    </>
+                )}
             </div>
         )}
 
@@ -175,12 +222,6 @@ service cloud.firestore {
         <div className="relative z-10">
             {view === AppView.DASHBOARD && <Dashboard onNavigate={navigate} />}
             
-            {view === AppView.LOCATION_CHECKLIST && (
-                <div className="animate-fade-in">
-                    <LocationChecklist onNavigate={navigate} />
-                </div>
-            )}
-
             {view === AppView.DAMAGED_REPORT && (
                 <div className="animate-fade-in">
                     <DamagedReport onNavigate={navigate} />

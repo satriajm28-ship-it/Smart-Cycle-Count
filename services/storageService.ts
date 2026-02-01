@@ -28,7 +28,8 @@ const LOCAL_KEYS = {
   MASTER_DATA: 'local_master_data',
   AUDIT_LOGS: 'local_audit_logs',
   LOCATIONS: 'local_locations',
-  STATES: 'local_states'
+  STATES: 'local_states',
+  OFFLINE_QUEUE: 'offline_audit_queue' // New Key for pending uploads
 };
 
 // Global callback for UI to react to permission issues
@@ -57,6 +58,61 @@ const setLocal = (key: string, data: any) => {
     }
 };
 
+// --- SYNC ENGINE ---
+
+export const getOfflineQueueCount = (): number => {
+    const queue = getLocal<AuditRecord[]>(LOCAL_KEYS.OFFLINE_QUEUE, []);
+    return queue.length;
+};
+
+// Function to process pending offline data
+export const syncOfflineQueue = async (onProgress?: (remaining: number) => void): Promise<void> => {
+    const queue = getLocal<AuditRecord[]>(LOCAL_KEYS.OFFLINE_QUEUE, []);
+    
+    if (queue.length === 0) return;
+
+    console.log(`Attempting to sync ${queue.length} offline records...`);
+    const remainingQueue: AuditRecord[] = [];
+
+    for (const record of queue) {
+        try {
+            // 1. Try to save Audit Log to Firestore
+            // Use setDoc with specific ID to prevent duplicates if retried
+            await setDoc(doc(db, COLLECTIONS.AUDIT_LOGS, record.id), record);
+
+            // 2. Update Location Status
+            const updateData = { 
+                teamMember: record.teamMember,
+                description: record.notes || undefined,
+                photoUrl: (record.evidencePhotos && record.evidencePhotos.length > 0) ? record.evidencePhotos[0] : undefined
+            };
+            
+            // Explicitly call setDoc for location status to ensure cloud update
+            // We construct the state object manually to ensure it matches what updateLocationStatus does
+            const state: LocationState = {
+                locationId: record.location,
+                status: 'audited',
+                timestamp: record.timestamp, // Use record timestamp
+                photoUrl: updateData.photoUrl,
+                description: updateData.description,
+                reportedBy: updateData.teamMember
+            };
+            await setDoc(doc(db, COLLECTIONS.LOCATION_STATES, record.location), state, { merge: true });
+
+            // If success, don't add to remainingQueue (effectively removing it)
+        } catch (error) {
+            console.error(`Failed to sync record ${record.id}:`, error);
+            remainingQueue.push(record); // Keep in queue to retry later
+        }
+    }
+
+    // Update the queue in local storage
+    setLocal(LOCAL_KEYS.OFFLINE_QUEUE, remainingQueue);
+    
+    if (onProgress) onProgress(remainingQueue.length);
+    console.log(`Sync complete. Remaining: ${remainingQueue.length}`);
+};
+
 // --- REAL-TIME SUBSCRIPTIONS ---
 
 export const subscribeToMasterData = (onUpdate: (data: MasterItem[]) => void, onError?: (error: FirestoreError) => void) => {
@@ -64,19 +120,16 @@ export const subscribeToMasterData = (onUpdate: (data: MasterItem[]) => void, on
   unsubscribe = onSnapshot(collection(db, COLLECTIONS.MASTER_DATA), 
     (snapshot) => {
       const data = snapshot.docs.map(doc => doc.data() as MasterItem);
-      // Sync to local for offline backup, but Cloud is truth
       setLocal(LOCAL_KEYS.MASTER_DATA, data);
       onUpdate(data);
     }, 
     (error) => {
       if (error.code === 'permission-denied') {
-          console.info("MasterData: Firebase permissions restricted. Using local cache.");
           onPermissionError?.(error);
           const localData = getLocal<MasterItem[]>(LOCAL_KEYS.MASTER_DATA, []);
           onUpdate(localData);
           if (unsubscribe) unsubscribe();
       } else {
-          console.error("MasterData listener error:", error.message);
           if (onError) onError(error);
       }
     }
@@ -95,13 +148,11 @@ export const subscribeToAuditLogs = (onUpdate: (data: AuditRecord[]) => void, on
     }, 
     (error) => {
       if (error.code === 'permission-denied') {
-          console.info("AuditLogs: Firebase permissions restricted. Using local cache.");
           onPermissionError?.(error);
           const localData = getLocal<AuditRecord[]>(LOCAL_KEYS.AUDIT_LOGS, []);
           onUpdate(localData);
           if (unsubscribe) unsubscribe();
       } else {
-          console.error("AuditLogs listener error:", error.message);
           if (onError) onError(error);
       }
     }
@@ -122,13 +173,11 @@ export const subscribeToLocationStates = (onUpdate: (data: Record<string, Locati
     }, 
     (error) => {
       if (error.code === 'permission-denied') {
-          console.info("LocationStates: Firebase permissions restricted. Using local cache.");
           onPermissionError?.(error);
           const localStates = getLocal<Record<string, LocationState>>(LOCAL_KEYS.STATES, {});
           onUpdate(localStates);
           if (unsubscribe) unsubscribe();
       } else {
-          console.error("LocationStates listener error:", error.message);
           if (onError) onError(error);
       }
     }
@@ -150,7 +199,6 @@ export const getMasterData = async (): Promise<MasterItem[]> => {
   }
 };
 
-// Utility to generate consistent ID
 const getMasterKey = (i: MasterItem) => `${(i.sku||'UNKNOWN').replace(/[^a-zA-Z0-9-_]/g, '')}_${i.batchNumber}_${i.expiryDate}`;
 
 export const deleteAllMasterData = async (onProgress?: (msg: string) => void) => {
@@ -177,7 +225,6 @@ export const deleteAllMasterData = async (onProgress?: (msg: string) => void) =>
             if (onProgress) onProgress(`Deleted ${deletedCount} of ${total} records...`);
         }
         
-        // Clear local cache immediately
         setLocal(LOCAL_KEYS.MASTER_DATA, []);
     } catch (e) {
         console.error("Error deleting master data:", e);
@@ -186,10 +233,6 @@ export const deleteAllMasterData = async (onProgress?: (msg: string) => void) =>
 };
 
 export const saveMasterData = async (data: MasterItem[], onProgress?: (progress: number) => void) => {
-  // We prioritize Firestore. If Firestore write succeeds, the 'subscribeToMasterData' 
-  // will automatically update the UI for ALL users.
-  
-  // Firestore Batches (Limit 500 ops per batch)
   const BATCH_SIZE = 400; 
   const chunks = [];
   for (let i = 0; i < data.length; i += BATCH_SIZE) {
@@ -210,8 +253,6 @@ export const saveMasterData = async (data: MasterItem[], onProgress?: (progress:
         if (onProgress) onProgress(Math.min(100, Math.round((processed / data.length) * 100)));
     }
     
-    // Also update local storage for immediate offline backup availability
-    // Note: The listener will likely overwrite this moments later, which is fine.
     const current = getLocal<MasterItem[]>(LOCAL_KEYS.MASTER_DATA, []);
     const map = new Map<string, MasterItem>();
     current.forEach(i => map.set(getMasterKey(i), i));
@@ -253,46 +294,74 @@ export const saveAuditLog = async (record: AuditRecord) => {
       photoUrl: (record.evidencePhotos && record.evidencePhotos.length > 0) ? record.evidencePhotos[0] : undefined
   };
 
+  // Optimistic update for UI responsiveness (Update view immediately)
+  const currentLogs = getLocal<AuditRecord[]>(LOCAL_KEYS.AUDIT_LOGS, []);
+  setLocal(LOCAL_KEYS.AUDIT_LOGS, [record, ...currentLogs]);
+
   try {
-      await addDoc(collection(db, COLLECTIONS.AUDIT_LOGS), record);
+      // Use setDoc with the record.id to ensure idempotency (safe to retry)
+      await setDoc(doc(db, COLLECTIONS.AUDIT_LOGS, record.id), record);
+      
+      // Update location status in cloud
       await updateLocationStatus(record.location, 'audited', updateData);
   } catch (e) {
       if ((e as FirestoreError).code === 'permission-denied') onPermissionError?.(e as FirestoreError);
-      // Ensure local logs stay updated
-      const currentLogs = getLocal<AuditRecord[]>(LOCAL_KEYS.AUDIT_LOGS, []);
-      setLocal(LOCAL_KEYS.AUDIT_LOGS, [record, ...currentLogs]);
+      
+      console.warn("Offline or Error saving to cloud. Adding to offline queue.");
+      
+      // Add to Offline Queue for later Sync
+      const queue = getLocal<AuditRecord[]>(LOCAL_KEYS.OFFLINE_QUEUE, []);
+      // Check if already in queue to avoid dupes
+      if (!queue.find(q => q.id === record.id)) {
+          queue.push(record);
+          setLocal(LOCAL_KEYS.OFFLINE_QUEUE, queue);
+      }
+      
+      // We also update local location state so the UI reflects it immediately even if offline
+      const currentStates = getLocal<Record<string, LocationState>>(LOCAL_KEYS.STATES, {});
+      currentStates[record.location] = {
+          locationId: record.location,
+          status: 'audited',
+          timestamp: record.timestamp,
+          photoUrl: updateData.photoUrl,
+          description: updateData.description,
+          reportedBy: updateData.teamMember
+      };
+      setLocal(LOCAL_KEYS.STATES, currentStates);
   }
 };
 
-// --- CRUD OPERATIONS ---
-
 export const updateAuditLog = async (id: string, updates: Partial<AuditRecord>) => {
+    // Optimistic Update
+    const currentLogs = getLocal<AuditRecord[]>(LOCAL_KEYS.AUDIT_LOGS, []);
+    const updatedLogs = currentLogs.map(log => 
+        log.id === id ? { ...log, ...updates } : log
+    );
+    setLocal(LOCAL_KEYS.AUDIT_LOGS, updatedLogs);
+
     try {
         const docRef = doc(db, COLLECTIONS.AUDIT_LOGS, id);
         await updateDoc(docRef, updates);
-        
-        // Optimistic update for local cache
-        const currentLogs = getLocal<AuditRecord[]>(LOCAL_KEYS.AUDIT_LOGS, []);
-        const updatedLogs = currentLogs.map(log => 
-            log.id === id ? { ...log, ...updates } : log
-        );
-        setLocal(LOCAL_KEYS.AUDIT_LOGS, updatedLogs);
     } catch (e) {
         if ((e as FirestoreError).code === 'permission-denied') onPermissionError?.(e as FirestoreError);
+        // Note: We don't currently queue updates/deletes in this basic implementation, 
+        // but the optimistic update makes it usable locally.
+        console.warn("Update failed, change is local-only for now.");
         throw e;
     }
 };
 
 export const deleteAuditLog = async (id: string) => {
+    // Optimistic Update
+    const currentLogs = getLocal<AuditRecord[]>(LOCAL_KEYS.AUDIT_LOGS, []);
+    const updatedLogs = currentLogs.filter(log => log.id !== id);
+    setLocal(LOCAL_KEYS.AUDIT_LOGS, updatedLogs);
+
     try {
         await deleteDoc(doc(db, COLLECTIONS.AUDIT_LOGS, id));
-        
-        // Optimistic update for local cache
-        const currentLogs = getLocal<AuditRecord[]>(LOCAL_KEYS.AUDIT_LOGS, []);
-        const updatedLogs = currentLogs.filter(log => log.id !== id);
-        setLocal(LOCAL_KEYS.AUDIT_LOGS, updatedLogs);
     } catch (e) {
         if ((e as FirestoreError).code === 'permission-denied') onPermissionError?.(e as FirestoreError);
+        console.warn("Delete failed, change is local-only for now.");
         throw e;
     }
 };
@@ -322,12 +391,16 @@ export const updateLocationStatus = async (
         reportedBy: data?.teamMember
     };
 
+    // Optimistic Update
+    const currentStates = getLocal<Record<string, LocationState>>(LOCAL_KEYS.STATES, {});
+    currentStates[locationName] = state;
+    setLocal(LOCAL_KEYS.STATES, currentStates);
+
     try {
         await setDoc(doc(db, COLLECTIONS.LOCATION_STATES, locationName), state, { merge: true });
     } catch (e) {
         if ((e as FirestoreError).code === 'permission-denied') onPermissionError?.(e as FirestoreError);
-        const currentStates = getLocal<Record<string, LocationState>>(LOCAL_KEYS.STATES, {});
-        currentStates[locationName] = state;
-        setLocal(LOCAL_KEYS.STATES, currentStates);
+        // Fail silently as we updated local state. 
+        // Note: For 'audited' status, the syncOfflineQueue handles the retry.
     }
 };

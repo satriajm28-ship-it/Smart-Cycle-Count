@@ -535,10 +535,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
                 <span className="material-symbols-outlined">barcode_scanner</span>
                 <span className="text-[10px] font-medium">Scan</span>
             </button>
-            <button onClick={() => onNavigate(AppView.LOCATION_CHECKLIST)} className="flex flex-col items-center gap-1 flex-1 text-slate-400">
-                <span className="material-symbols-outlined">checklist</span>
-                <span className="text-[10px] font-medium">Lokasi</span>
-            </button>
             <button onClick={() => onNavigate(AppView.MASTER_DATA)} className="flex flex-col items-center gap-1 flex-1 text-slate-400">
                 <span className="material-symbols-outlined">database</span>
                 <span className="text-[10px] font-medium">Data</span>
