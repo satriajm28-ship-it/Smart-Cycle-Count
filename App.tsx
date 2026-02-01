@@ -65,7 +65,7 @@ const App: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-[#f6f6f8]">
+    <div className="min-h-screen bg-[#f6f6f8] relative">
         {/* Connection Warning Banner */}
         {hasPermissionError && (
             <div className="bg-amber-600 text-white px-4 py-2 text-[10px] sm:text-xs font-bold text-center sticky top-0 z-[100] flex items-center justify-center gap-2 shadow-lg">
@@ -79,6 +79,15 @@ const App: React.FC = () => {
                 </button>
             </div>
         )}
+
+        {/* WATERMARK */}
+        <div className="fixed bottom-20 left-0 right-0 flex justify-center pointer-events-none z-0">
+            <div className="bg-slate-200/50 dark:bg-slate-800/50 px-3 py-1 rounded-full backdrop-blur-[2px]">
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-600">
+                    Version Beta <span className="mx-1 text-slate-300">•</span> powered by Satria JM
+                </p>
+            </div>
+        </div>
 
         {/* Setup Helper Modal */}
         {showSetupHelper && (
@@ -163,41 +172,43 @@ service cloud.firestore {
             </div>
         )}
 
-        {view === AppView.DASHBOARD && <Dashboard onNavigate={navigate} />}
-        
-        {view === AppView.LOCATION_CHECKLIST && (
-            <div className="animate-fade-in">
-                <LocationChecklist onNavigate={navigate} />
-            </div>
-        )}
+        <div className="relative z-10">
+            {view === AppView.DASHBOARD && <Dashboard onNavigate={navigate} />}
+            
+            {view === AppView.LOCATION_CHECKLIST && (
+                <div className="animate-fade-in">
+                    <LocationChecklist onNavigate={navigate} />
+                </div>
+            )}
 
-        {view === AppView.DAMAGED_REPORT && (
-            <div className="animate-fade-in">
-                <DamagedReport onNavigate={navigate} />
-            </div>
-        )}
-        
-        {view === AppView.FORM && (
-            <div className="animate-fade-in">
-                <AuditForm 
-                    onSuccess={() => navigate(AppView.DASHBOARD)} 
-                    initialLocation={navParams?.initialLocation}
-                />
-            </div>
-        )}
+            {view === AppView.DAMAGED_REPORT && (
+                <div className="animate-fade-in">
+                    <DamagedReport onNavigate={navigate} />
+                </div>
+            )}
+            
+            {view === AppView.FORM && (
+                <div className="animate-fade-in">
+                    <AuditForm 
+                        onSuccess={() => navigate(AppView.DASHBOARD)} 
+                        initialLocation={navParams?.initialLocation}
+                    />
+                </div>
+            )}
 
-        {view === AppView.MASTER_DATA && (
-            <div className="p-4 md:p-8 animate-fade-in relative">
-                 <button 
-                    onClick={() => navigate(AppView.DASHBOARD)}
-                    className="mb-4 flex items-center gap-2 text-slate-600 hover:text-slate-900 font-bold text-sm"
-                 >
-                    <span className="material-symbols-outlined">arrow_back</span>
-                    Back to Dashboard
-                 </button>
-                <MasterData />
-            </div>
-        )}
+            {view === AppView.MASTER_DATA && (
+                <div className="p-4 md:p-8 animate-fade-in relative">
+                    <button 
+                        onClick={() => navigate(AppView.DASHBOARD)}
+                        className="mb-4 flex items-center gap-2 text-slate-600 hover:text-slate-900 font-bold text-sm"
+                    >
+                        <span className="material-symbols-outlined">arrow_back</span>
+                        Back to Dashboard
+                    </button>
+                    <MasterData />
+                </div>
+            )}
+        </div>
     </div>
   );
 };

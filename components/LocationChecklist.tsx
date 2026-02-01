@@ -39,20 +39,31 @@ export const LocationChecklist: React.FC<LocationChecklistProps> = ({ onNavigate
     refreshData();
   }, []);
 
+  // LOGIC FIX:
+  // Pending = Not Audited Yet (no state or status='pending') OR Damaged (has issues)
+  // Completed = Audited OR Marked Empty (and not damaged)
+  
   const pendingLocations = locations.filter(loc => {
       const state = locationStates[loc.name];
-      if (!state) return true; 
+      // If no state exists, it is definitely pending
+      if (!state) return true;
       
-      const hasIssues = (state.description && state.description.trim() !== '') || state.photoUrl;
-      return hasIssues; 
+      const isDamaged = (state.description && state.description.trim() !== '') || state.photoUrl || state.status === 'damaged';
+      const isPending = state.status === 'pending';
+      
+      // Show in Pending tab if it's damaged OR simply hasn't been audited/marked empty yet
+      return isDamaged || isPending;
   });
 
   const completedLocations = locations.filter(loc => {
       const state = locationStates[loc.name];
       if (!state) return false;
       
-      const hasIssues = (state.description && state.description.trim() !== '') || state.photoUrl;
-      return !hasIssues; 
+      const isDamaged = (state.description && state.description.trim() !== '') || state.photoUrl || state.status === 'damaged';
+      const isFinished = state.status === 'audited' || state.status === 'empty';
+      
+      // Show in Completed tab only if it's finished AND has no active damage report
+      return isFinished && !isDamaged;
   });
 
   const totalLocations = locations.length;
@@ -67,7 +78,7 @@ export const LocationChecklist: React.FC<LocationChecklistProps> = ({ onNavigate
   };
 
   const handleMarkEmpty = async (locationName: string) => {
-    if (confirm(`Mark ${locationName} as Empty?`)) {
+    if (confirm(`Tandai ${locationName} sebagai Kosong?`)) {
         await updateLocationStatus(locationName, 'empty');
         refreshData();
     }
@@ -94,7 +105,7 @@ export const LocationChecklist: React.FC<LocationChecklistProps> = ({ onNavigate
   const submitDamageReport = async () => {
       if (!selectedLocation) return;
       if (!damageDescription) {
-          alert("Please provide a description of the damage.");
+          alert("Mohon isi deskripsi kerusakan.");
           return;
       }
       await updateLocationStatus(selectedLocation, 'damaged', {
@@ -110,7 +121,7 @@ export const LocationChecklist: React.FC<LocationChecklistProps> = ({ onNavigate
       return (
           <div className="flex flex-col items-center justify-center min-h-screen text-slate-500 gap-3">
               <span className="material-symbols-outlined animate-spin text-4xl">sync</span>
-              <p>Loading locations...</p>
+              <p>Memuat Lokasi...</p>
           </div>
       );
   }
@@ -130,7 +141,7 @@ export const LocationChecklist: React.FC<LocationChecklistProps> = ({ onNavigate
         <button onClick={() => onNavigate(AppView.DASHBOARD)} className="flex items-center justify-center w-10 h-10 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors text-slate-700 dark:text-slate-300">
           <span className="material-symbols-outlined">arrow_back</span>
         </button>
-        <h1 className="text-lg font-bold text-center flex-1 text-slate-900 dark:text-white">Location Checklist</h1>
+        <h1 className="text-lg font-bold text-center flex-1 text-slate-900 dark:text-white">Ceklis Lokasi</h1>
         <button onClick={() => setIsScannerOpen(true)} className="flex items-center justify-center w-10 h-10 rounded-full text-primary hover:bg-primary/10">
           <span className="material-symbols-outlined">qr_code_scanner</span>
         </button>
@@ -140,8 +151,8 @@ export const LocationChecklist: React.FC<LocationChecklistProps> = ({ onNavigate
       <div className="px-4 py-4 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800">
           <div className="flex justify-between items-end mb-2">
               <div>
-                  <h2 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Audit Progress</h2>
-                  <p className="text-xs text-slate-400 dark:text-slate-500">{completedCount} of {totalLocations} clear</p>
+                  <h2 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Progres Audit</h2>
+                  <p className="text-xs text-slate-400 dark:text-slate-500">{completedCount} dari {totalLocations} selesai</p>
               </div>
               <span className="text-xl font-black text-primary">{progressPercentage}%</span>
           </div>
@@ -159,13 +170,13 @@ export const LocationChecklist: React.FC<LocationChecklistProps> = ({ onNavigate
           onClick={() => setActiveTab('pending')}
           className={`flex-1 py-3 text-[10px] font-bold uppercase tracking-widest border-b-2 transition-colors ${activeTab === 'pending' ? 'border-primary text-primary' : 'border-transparent text-slate-400 hover:text-slate-600'}`}
         >
-          Pending / Issues ({pendingLocations.length})
+          Belum Cek / Masalah ({pendingLocations.length})
         </button>
         <button 
           onClick={() => setActiveTab('completed')}
           className={`flex-1 py-3 text-[10px] font-bold uppercase tracking-widest border-b-2 transition-colors ${activeTab === 'completed' ? 'border-primary text-primary' : 'border-transparent text-slate-400 hover:text-slate-600'}`}
         >
-          Clean ({completedLocations.length})
+          Selesai ({completedLocations.length})
         </button>
       </div>
 
@@ -181,7 +192,7 @@ export const LocationChecklist: React.FC<LocationChecklistProps> = ({ onNavigate
                   ) : (
                       pendingLocations.map(loc => {
                           const state = locationStates[loc.name];
-                          const hasIssue = state && ((state.description && state.description.trim() !== '') || state.photoUrl);
+                          const hasIssue = state && ((state.description && state.description.trim() !== '') || state.photoUrl || state.status === 'damaged');
                           
                           return (
                             <div key={loc.id} className={`bg-white dark:bg-slate-900 rounded-xl p-4 shadow-sm border ${hasIssue ? 'border-red-200 dark:border-red-900/50 bg-red-50/20' : 'border-slate-200 dark:border-slate-800'} flex flex-col gap-3 transition-all`}>
@@ -189,7 +200,7 @@ export const LocationChecklist: React.FC<LocationChecklistProps> = ({ onNavigate
                                     <div className="min-w-0 flex-1">
                                         <h3 className="font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
                                             {loc.name}
-                                            {hasIssue && <span className="flex-shrink-0 px-1.5 py-0.5 rounded-full bg-red-100 text-red-600 text-[8px] font-bold uppercase tracking-tighter">Issue Review</span>}
+                                            {hasIssue && <span className="flex-shrink-0 px-1.5 py-0.5 rounded-full bg-red-100 text-red-600 text-[8px] font-bold uppercase tracking-tighter">Ada Masalah</span>}
                                         </h3>
                                         <span className="text-[10px] text-slate-400 font-medium bg-slate-50 dark:bg-slate-800 px-2 py-0.5 rounded mt-1 inline-block uppercase">{loc.zone}</span>
                                         {state?.description && (
@@ -208,13 +219,13 @@ export const LocationChecklist: React.FC<LocationChecklistProps> = ({ onNavigate
                                         onClick={() => handleMarkEmpty(loc.name)}
                                         className="flex-1 py-2 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 text-[10px] font-bold flex items-center justify-center gap-1 transition-colors uppercase"
                                     >
-                                        Mark Empty
+                                        Tandai Kosong
                                     </button>
                                     <button 
                                         onClick={() => openDamageModal(loc.name)}
                                         className="flex-1 py-2 rounded-lg border border-red-200 dark:border-red-900/50 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 text-[10px] font-bold flex items-center justify-center gap-1 transition-colors uppercase"
                                     >
-                                        Report Issue
+                                        Lapor Masalah
                                     </button>
                                 </div>
                             </div>
@@ -248,7 +259,7 @@ export const LocationChecklist: React.FC<LocationChecklistProps> = ({ onNavigate
                             </div>
                             <div className={`px-3 py-1.5 rounded-lg border flex items-center gap-1.5 text-[8px] font-bold uppercase tracking-widest ${statusClass}`}>
                                 <span className="material-symbols-outlined text-[14px]">{icon}</span>
-                                {status}
+                                {status === 'audited' ? 'SUDAH CEK' : 'KOSONG'}
                             </div>
                         </div>
                       );
@@ -263,7 +274,7 @@ export const LocationChecklist: React.FC<LocationChecklistProps> = ({ onNavigate
                   <div className="bg-red-600 p-4 text-white flex justify-between items-center">
                       <h3 className="font-bold text-lg flex items-center gap-2">
                           <span className="material-symbols-outlined">broken_image</span>
-                          Report Issue
+                          Lapor Kerusakan
                       </h3>
                       <button onClick={() => setIsDamageModalOpen(false)} className="hover:bg-red-700 rounded-full p-1">
                           <span className="material-symbols-outlined">close</span>
@@ -271,13 +282,13 @@ export const LocationChecklist: React.FC<LocationChecklistProps> = ({ onNavigate
                   </div>
                   <div className="p-4 space-y-4">
                       <div>
-                          <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Location</label>
+                          <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Lokasi</label>
                           <div className="bg-slate-100 dark:bg-slate-800 p-2 rounded-lg font-mono font-bold text-slate-700 dark:text-slate-200">
                               {selectedLocation}
                           </div>
                       </div>
                       <div>
-                          <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Catatan Issue</label>
+                          <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Catatan Masalah</label>
                           <textarea 
                             value={damageDescription}
                             onChange={(e) => setDamageDescription(e.target.value)}
@@ -285,13 +296,34 @@ export const LocationChecklist: React.FC<LocationChecklistProps> = ({ onNavigate
                             className="w-full rounded-lg border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm p-3 h-24"
                           ></textarea>
                       </div>
+                      <div className="flex gap-2 items-center">
+                          <input 
+                            type="file" 
+                            accept="image/*" 
+                            ref={fileInputRef} 
+                            className="hidden"
+                            onChange={handlePhotoCapture}
+                          />
+                          <button 
+                            onClick={() => fileInputRef.current?.click()}
+                            className="flex-1 py-3 border border-dashed border-slate-300 rounded-lg text-slate-500 text-xs flex items-center justify-center gap-1 hover:bg-slate-50"
+                          >
+                            <span className="material-symbols-outlined text-sm">add_a_photo</span>
+                            {damagePhoto ? 'Ganti Foto' : 'Ambil Foto'}
+                          </button>
+                          {damagePhoto && (
+                            <div className="w-12 h-12 rounded overflow-hidden border">
+                                <img src={damagePhoto} className="w-full h-full object-cover" />
+                            </div>
+                          )}
+                      </div>
                   </div>
                   <div className="p-4 bg-slate-50 dark:bg-slate-800/50 border-t border-slate-100 dark:border-slate-800 flex gap-3">
                       <button onClick={() => setIsDamageModalOpen(false)} className="flex-1 py-3 text-slate-500 font-bold hover:bg-slate-200 dark:hover:bg-slate-700 rounded-xl transition-colors">
-                          Cancel
+                          Batal
                       </button>
                       <button onClick={submitDamageReport} className="flex-[2] py-3 bg-red-600 text-white font-bold rounded-xl shadow-lg shadow-red-500/30 hover:bg-red-700 active:scale-95 transition-all">
-                          Submit Issue
+                          Kirim Laporan
                       </button>
                   </div>
               </div>

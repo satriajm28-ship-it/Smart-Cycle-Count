@@ -24,7 +24,7 @@ export const DamagedReport: React.FC<DamagedReportProps> = ({ onNavigate }) => {
             .filter(s => s.status === 'damaged')
             .map(s => {
                 const loc = locations.find(l => l.name === s.locationId);
-                return { ...s, zone: loc ? loc.zone : 'Unknown Zone' };
+                return { ...s, zone: loc ? loc.zone : 'Zona Tidak Diketahui' };
             });
         
         setDamagedItems(list);
@@ -38,7 +38,7 @@ export const DamagedReport: React.FC<DamagedReportProps> = ({ onNavigate }) => {
   };
 
   if (loading) {
-      return <div className="p-8 text-center text-slate-500">Loading Report...</div>;
+      return <div className="p-8 text-center text-slate-500">Memuat Laporan...</div>;
   }
 
   return (
@@ -49,7 +49,7 @@ export const DamagedReport: React.FC<DamagedReportProps> = ({ onNavigate }) => {
         <button onClick={() => onNavigate(AppView.DASHBOARD)} className="flex items-center justify-center w-10 h-10 rounded-full hover:bg-white/10 transition-colors">
           <span className="material-symbols-outlined">arrow_back</span>
         </button>
-        <h1 className="text-lg font-bold text-center flex-1">Damaged Evidence Report</h1>
+        <h1 className="text-lg font-bold text-center flex-1">Laporan Kerusakan & Bukti</h1>
         <button onClick={handlePrint} className="flex items-center justify-center w-10 h-10 rounded-full hover:bg-white/10 transition-colors">
            <span className="material-symbols-outlined">print</span>
         </button>
@@ -57,8 +57,8 @@ export const DamagedReport: React.FC<DamagedReportProps> = ({ onNavigate }) => {
 
       {/* Print Header (Visible only in Print) */}
       <div className="hidden print:block p-8 border-b-2 border-slate-900 mb-6">
-          <h1 className="text-3xl font-black uppercase tracking-wider mb-2">Damaged Locations Report</h1>
-          <p className="text-slate-600">Generated on: {new Date().toLocaleString()}</p>
+          <h1 className="text-3xl font-black uppercase tracking-wider mb-2">Laporan Lokasi Rusak</h1>
+          <p className="text-slate-600">Dibuat pada: {new Date().toLocaleString('id-ID')}</p>
       </div>
 
       <main className="flex-1 p-4 max-w-4xl mx-auto w-full">
@@ -67,8 +67,8 @@ export const DamagedReport: React.FC<DamagedReportProps> = ({ onNavigate }) => {
                   <div className="w-20 h-20 bg-green-50 rounded-full flex items-center justify-center mx-auto mb-4 text-green-600">
                       <span className="material-symbols-outlined text-4xl">check_circle</span>
                   </div>
-                  <h2 className="text-xl font-bold text-slate-800">No Damages Reported</h2>
-                  <p className="text-slate-500 mt-2">The warehouse is in good condition.</p>
+                  <h2 className="text-xl font-bold text-slate-800">Tidak Ada Laporan Kerusakan</h2>
+                  <p className="text-slate-500 mt-2">Kondisi gudang dalam keadaan baik.</p>
               </div>
           ) : (
               <div className="space-y-6">
@@ -82,32 +82,32 @@ export const DamagedReport: React.FC<DamagedReportProps> = ({ onNavigate }) => {
                                   </span>
                               </div>
                               <span className="text-xs font-mono text-slate-500 print:text-slate-900">
-                                  {new Date(item.timestamp).toLocaleString()}
+                                  {new Date(item.timestamp).toLocaleString('id-ID')}
                               </span>
                           </div>
                           
                           <div className="p-4 grid md:grid-cols-2 gap-6 print:grid-cols-2">
                               <div className="space-y-4">
                                   <div>
-                                      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Reported By</label>
-                                      <p className="text-sm font-medium text-slate-800">{item.reportedBy || 'Unknown User'}</p>
+                                      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Dilaporkan Oleh</label>
+                                      <p className="text-sm font-medium text-slate-800">{item.reportedBy || 'Anonim'}</p>
                                   </div>
                                   <div>
-                                      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Problem Description</label>
+                                      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Deskripsi Masalah</label>
                                       <div className="bg-slate-50 p-3 rounded-lg border border-slate-100 text-sm text-slate-700 min-h-[80px] print:bg-white print:border-slate-300">
-                                          {item.description || 'No description provided.'}
+                                          {item.description || 'Tidak ada deskripsi.'}
                                       </div>
                                   </div>
                               </div>
                               
                               <div>
-                                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Evidence Photo</label>
+                                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Bukti Foto</label>
                                   {item.photoUrl ? (
                                       <div 
                                         className="rounded-lg overflow-hidden border border-slate-200 aspect-video bg-slate-100 cursor-zoom-in relative group print:cursor-default"
                                         onClick={() => setSelectedImage(item.photoUrl!)}
                                       >
-                                          <img src={item.photoUrl} className="w-full h-full object-cover" alt="Damage Evidence" />
+                                          <img src={item.photoUrl} className="w-full h-full object-cover" alt="Bukti Kerusakan" />
                                           <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center print:hidden">
                                               <span className="material-symbols-outlined text-white opacity-0 group-hover:opacity-100 drop-shadow-md">zoom_in</span>
                                           </div>
@@ -115,7 +115,7 @@ export const DamagedReport: React.FC<DamagedReportProps> = ({ onNavigate }) => {
                                   ) : (
                                       <div className="rounded-lg border-2 border-dashed border-slate-200 aspect-video flex flex-col items-center justify-center text-slate-400 bg-slate-50">
                                           <span className="material-symbols-outlined text-3xl mb-1">image_not_supported</span>
-                                          <span className="text-xs">No Photo Available</span>
+                                          <span className="text-xs">Tidak Ada Foto</span>
                                       </div>
                                   )}
                               </div>
@@ -137,7 +137,7 @@ export const DamagedReport: React.FC<DamagedReportProps> = ({ onNavigate }) => {
               </button>
               <img 
                 src={selectedImage} 
-                alt="Full Size Evidence" 
+                alt="Bukti Full Size" 
                 className="max-w-full max-h-[90vh] rounded-lg shadow-2xl"
                 onClick={(e) => e.stopPropagation()} 
               />
