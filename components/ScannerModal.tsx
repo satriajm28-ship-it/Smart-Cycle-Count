@@ -45,12 +45,12 @@ export const ScannerModal: React.FC<ScannerModalProps> = ({ isOpen, onClose, onS
               await scanner.start(
                 { facingMode: "environment" }, 
                 config,
-                (decodedText) => {
+                (decodedText: string) => {
                   if (isMounted) {
                     onScanSuccess(decodedText);
                   }
                 },
-                (errorMessage) => {
+                (errorMessage: any) => {
                   // ignore frame errors
                 }
               );
@@ -80,7 +80,7 @@ export const ScannerModal: React.FC<ScannerModalProps> = ({ isOpen, onClose, onS
             // Stop silently
             scannerRef.current.stop().then(() => {
                 scannerRef.current?.clear();
-            }).catch(e => console.debug("Stop ignored", e));
+            }).catch((e: any) => console.debug("Stop ignored", e));
         }
       };
     }
