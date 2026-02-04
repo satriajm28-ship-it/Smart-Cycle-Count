@@ -21,7 +21,10 @@ export const AuditForm: React.FC<AuditFormProps> = ({ onSuccess, initialLocation
   const [location, setLocation] = useState(initialLocation || '');
   const [physicalQty, setPhysicalQty] = useState<number>(0);
   const [batchNumber, setBatchNumber] = useState('');
+  
+  // Changed to string for DD-MM-YYYY manual input
   const [expiryDate, setExpiryDate] = useState('');
+  
   const [teamName, setTeamName] = useState(() => localStorage.getItem('team_member_name') || '');
   const [notes, setNotes] = useState('');
   const [evidencePhotos, setEvidencePhotos] = useState<string[]>([]);
@@ -29,14 +32,13 @@ export const AuditForm: React.FC<AuditFormProps> = ({ onSuccess, initialLocation
   const [foundItem, setFoundItem] = useState<MasterItem | null>(null);
   const [scannerType, setScannerType] = useState<'sku' | 'location' | null>(null);
   
+  const scannedOverrides = useRef<{ sku: string, batch?: string, expiry?: string } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Sync Team Name to LocalStorage
   useEffect(() => {
     if (teamName) localStorage.setItem('team_member_name', teamName);
   }, [teamName]);
 
-  // Load Master Data
   useEffect(() => {
     let mounted = true;
     const initData = async () => {
@@ -54,27 +56,132 @@ export const AuditForm: React.FC<AuditFormProps> = ({ onSuccess, initialLocation
     return () => { mounted = false; };
   }, []);
 
+  // --- DATE HELPERS ---
+  const formatIsoToDisplay = (isoDate: string): string => {
+    // Converts YYYY-MM-DD to DD-MM-YYYY
+    if (!isoDate || isoDate.length !== 10) return isoDate;
+    const parts = isoDate.split('-');
+    if (parts.length === 3) {
+      return `${parts[2]}-${parts[1]}-${parts[0]}`;
+    }
+    return isoDate;
+  };
+
+  const formatDisplayToIso = (displayDate: string): string => {
+    // Converts DD-MM-YYYY to YYYY-MM-DD (optional, if needed for storage normalization)
+    // For now, we will store as DD-MM-YYYY as requested by "Format YYYY-MM-DD rubah ke DDMMYYYY"
+    return displayDate; 
+  };
+
+  const autoFormatDateInput = (val: string) => {
+    // Remove non-numeric characters (except - or /)
+    const raw = val.replace(/[^0-9]/g, '');
+    
+    // If user types 31122025 -> 31-12-2025
+    if (raw.length === 8) {
+      return `${raw.substring(0, 2)}-${raw.substring(2, 4)}-${raw.substring(4, 8)}`;
+    }
+    // If user types 311225 -> 31-12-2025
+    if (raw.length === 6) {
+      return `${raw.substring(0, 2)}-${raw.substring(2, 4)}-20${raw.substring(4, 6)}`;
+    }
+    return val;
+  };
+
   // --- AUTOMATIC LOOKUP LOGIC ---
-  // When SKU changes (via scanning or typing), lookup details automatically
   useEffect(() => {
     if (loadingData || !sku) {
       setFoundItem(null);
       return;
     }
 
-    // Attempt to find matching item (case-insensitive)
     const normalizedSku = sku.trim().toLowerCase();
     const match = allMasterItems.find(i => i.sku.toLowerCase() === normalizedSku);
 
     if (match) {
       setFoundItem(match);
-      // AUTO-FILL: This is the core logic requested
-      setBatchNumber(match.batchNumber || '-');
-      setExpiryDate(match.expiryDate || '');
+      
+      if (scannedOverrides.current && scannedOverrides.current.sku === normalizedSku) {
+          if (scannedOverrides.current.batch) setBatchNumber(scannedOverrides.current.batch);
+          if (scannedOverrides.current.expiry) setExpiryDate(scannedOverrides.current.expiry);
+          scannedOverrides.current = null;
+      } else {
+          setBatchNumber(match.batchNumber || '-');
+          // Convert Master Data (YYYY-MM-DD) to Display (DD-MM-YYYY)
+          setExpiryDate(match.expiryDate ? formatIsoToDisplay(match.expiryDate) : '');
+      }
+
     } else {
       setFoundItem(null);
+      if (scannedOverrides.current && scannedOverrides.current.sku === normalizedSku) {
+          if (scannedOverrides.current.batch) setBatchNumber(scannedOverrides.current.batch);
+          if (scannedOverrides.current.expiry) setExpiryDate(scannedOverrides.current.expiry);
+          scannedOverrides.current = null;
+      }
     }
   }, [sku, loadingData, allMasterItems]);
+
+  // --- SMART SCAN PARSER ---
+  const parseScannedDate = (raw: string): string => {
+      // Logic: Convert DDMMYYYY (30093039) -> 30-09-3039
+      const clean = raw.replace(/[^0-9]/g, '');
+      if (clean.length === 8) {
+          const d = clean.substring(0, 2);
+          const m = clean.substring(2, 4);
+          const y = clean.substring(4, 8);
+          return `${d}-${m}-${y}`;
+      }
+      return raw;
+  };
+
+  const handleScanInput = (text: string) => {
+      if (scannerType === 'location') {
+          setLocation(text.trim().toUpperCase());
+          setScannerType(null);
+          return;
+      }
+
+      // Logic to handle specific format: SKU,BATCH,EXPIRY
+      // Example: 123BX,12345GG,30093039
+      let parts: string[] = [];
+
+      if (text.includes(',')) {
+          // Priority: Comma separated
+          parts = text.split(',');
+      } else if (text.includes('|')) {
+          // Fallback: Pipe separated
+          parts = text.split('|');
+      } else {
+          // Single SKU
+          parts = [text];
+      }
+
+      const scannedSku = parts[0].trim();
+      
+      if (parts.length > 1) {
+          // If we have more than just SKU
+          scannedOverrides.current = {
+              sku: scannedSku.toLowerCase(),
+              // Index 1 is Batch
+              batch: parts[1] ? parts[1].trim() : undefined,
+              // Index 2 is Expiry (e.g. 30093039)
+              expiry: parts[2] ? parseScannedDate(parts[2].trim()) : undefined
+          };
+      } else {
+          scannedOverrides.current = null;
+      }
+
+      setSku(scannedSku);
+      setScannerType(null);
+  };
+
+  // Handler to auto-parse manual input if it contains comma separators
+  const handleManualSkuBlur = (e: React.FocusEvent<HTMLInputElement>) => {
+      const val = e.target.value;
+      if (val.includes(',') || val.includes('|')) {
+          handleScanInput(val);
+      }
+  };
 
   const systemStock = foundItem ? foundItem.systemStock : 0;
   const variance = physicalQty - systemStock;
@@ -172,11 +279,7 @@ export const AuditForm: React.FC<AuditFormProps> = ({ onSuccess, initialLocation
         <ScannerModal 
           isOpen={!!scannerType} 
           onClose={() => setScannerType(null)} 
-          onScanSuccess={(text) => {
-            if (scannerType === 'sku') setSku(text.trim());
-            else setLocation(text.trim().toUpperCase());
-            setScannerType(null);
-          }} 
+          onScanSuccess={handleScanInput} 
           title={scannerType === 'sku' ? "Scan Barcode Barang" : "Scan QR Lokasi"} 
         />
 
@@ -221,6 +324,14 @@ export const AuditForm: React.FC<AuditFormProps> = ({ onSuccess, initialLocation
                       type="text" 
                       value={sku} 
                       onChange={(e) => setSku(e.target.value)} 
+                      onBlur={handleManualSkuBlur}
+                      onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                              e.preventDefault();
+                              handleScanInput(e.currentTarget.value);
+                          }
+                      }}
+                      autoFocus
                     />
                     <button onClick={() => setScannerType('sku')} className="absolute right-1 top-1 bottom-1 w-12 bg-primary text-white rounded-lg flex items-center justify-center shadow-lg shadow-primary/20">
                         <span className="material-symbols-outlined">barcode_scanner</span>
@@ -242,17 +353,19 @@ export const AuditForm: React.FC<AuditFormProps> = ({ onSuccess, initialLocation
                               className="w-full p-2 rounded-lg border border-slate-200 dark:border-slate-700 dark:bg-slate-900 text-xs font-bold" 
                               value={batchNumber} 
                               onChange={(e) => setBatchNumber(e.target.value)} 
-                              placeholder="Ketik manual jika berbeda"
+                              placeholder="Auto / Manual"
                             />
                         </div>
                         <div className="space-y-1">
-                            <span className="text-[10px] text-slate-400 block mb-1 uppercase font-bold tracking-tight">Expiry Date</span>
+                            <span className="text-[10px] text-slate-400 block mb-1 uppercase font-bold tracking-tight">Expiry Date (DD-MM-YYYY)</span>
                             <input 
                               type="text"
-                              className="w-full p-2 rounded-lg border border-slate-200 dark:border-slate-700 dark:bg-slate-900 text-xs font-bold" 
+                              inputMode="numeric"
+                              className="w-full p-2 rounded-lg border border-slate-200 dark:border-slate-700 dark:bg-slate-900 text-xs font-bold font-mono placeholder-slate-300" 
                               value={expiryDate} 
+                              placeholder="DD-MM-YYYY"
                               onChange={(e) => setExpiryDate(e.target.value)}
-                              placeholder="YYYY-MM-DD"
+                              onBlur={(e) => setExpiryDate(autoFormatDateInput(e.target.value))}
                             />
                         </div>
                     </div>
@@ -282,21 +395,31 @@ export const AuditForm: React.FC<AuditFormProps> = ({ onSuccess, initialLocation
                 </div>
             </section>
 
-            {/* PHYSICAL COUNT SECTION */}
+            {/* PHYSICAL COUNT SECTION - IMPROVED UI SIZE */}
             <section className="mb-6">
-                <h3 className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-2 px-1">Hitung Fisik</h3>
+                <h3 className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-2 px-1">Hitung Fisik (Quantity)</h3>
                 <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
-                    <div className="p-5 flex gap-4 items-center">
-                        <button onClick={() => setPhysicalQty(prev => Math.max(0, prev - 1))} className="w-14 h-14 rounded-2xl border border-slate-200 dark:border-slate-700 flex items-center justify-center text-slate-500 hover:bg-slate-100 transition-colors">
+                    <div className="p-3 flex gap-2 items-center">
+                        <button 
+                            onClick={() => setPhysicalQty(prev => Math.max(0, prev - 1))} 
+                            className="w-14 h-14 rounded-xl border-2 border-slate-100 dark:border-slate-700 flex items-center justify-center text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 hover:border-slate-300 transition-all active:scale-95"
+                        >
                             <span className="material-symbols-outlined text-2xl font-bold">remove</span>
                         </button>
+                        
                         <input 
-                          className="flex-1 h-14 text-center text-3xl font-black font-mono text-primary bg-slate-50 dark:bg-slate-900 border-none rounded-2xl focus:ring-2 focus:ring-primary/20" 
+                          className="flex-1 h-14 text-center text-3xl font-black font-mono text-primary bg-slate-50 dark:bg-slate-900 border-none rounded-xl focus:ring-2 focus:ring-primary/20 outline-none" 
                           type="number" 
+                          inputMode="numeric"
                           value={physicalQty} 
                           onChange={(e) => setPhysicalQty(parseInt(e.target.value) || 0)} 
+                          onFocus={(e) => e.target.select()}
                         />
-                        <button onClick={() => setPhysicalQty(prev => prev + 1)} className="w-14 h-14 rounded-2xl bg-primary text-white flex items-center justify-center shadow-lg shadow-primary/30 active:scale-95 transition-all">
+                        
+                        <button 
+                            onClick={() => setPhysicalQty(prev => prev + 1)} 
+                            className="w-14 h-14 rounded-xl bg-primary text-white flex items-center justify-center shadow-lg shadow-primary/30 active:scale-95 transition-all hover:bg-blue-500"
+                        >
                             <span className="material-symbols-outlined text-2xl font-bold">add</span>
                         </button>
                     </div>

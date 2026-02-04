@@ -187,12 +187,15 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
   }, [processDashboardData]);
 
   const handleDelete = async (id: string, e: React.MouseEvent) => {
-      e.stopPropagation();
+      e.preventDefault(); 
+      e.stopPropagation(); 
+      
       if (window.confirm("Hapus data scan ini?")) {
           try {
+              // Delete from firestore/local
               await deleteAuditLog(id);
-              dataRefs.current.logs = dataRefs.current.logs.filter(l => l.id !== id);
-              processDashboardData();
+              // We rely on the subscribeToAuditLogs listener to update the UI
+              // This prevents race conditions between manual filtering and snapshot updates
           } catch (error) {
               console.error("Delete failed:", error);
               alert("Gagal menghapus data.");
@@ -201,6 +204,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
   };
 
   const handleEditClick = (log: AuditRecord, e: React.MouseEvent) => {
+      e.preventDefault();
       e.stopPropagation();
       setEditingLog(log);
       setEditForm({
@@ -223,12 +227,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
               notes: editForm.notes
           });
           
-          dataRefs.current.logs = dataRefs.current.logs.map(l => 
-              l.id === editingLog.id ? { ...l, ...editForm } : l
-          );
-          
           setEditingLog(null);
-          processDashboardData();
+          // Listener will update UI
       } catch (error) {
           alert("Gagal update.");
       }
@@ -578,7 +578,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
                                                             className="relative w-20 h-20 rounded-2xl overflow-hidden border-2 border-slate-100 dark:border-slate-800 bg-slate-100 flex-shrink-0 group/photo cursor-zoom-in hover:border-primary/50 transition-all shadow-sm"
                                                         >
                                                             <img src={photo} className="w-full h-full object-cover group-hover/photo:scale-110 transition-transform duration-500" alt="Evidence" />
-                                                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/photo:opacity-100 transition-opacity flex items-center justify-center backdrop-blur-[2px]">
+                                                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center backdrop-blur-[2px]">
                                                                 <ZoomIn size={18} className="text-white" />
                                                             </div>
                                                         </div>

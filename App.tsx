@@ -18,9 +18,15 @@ const App: React.FC = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [hasPermissionError, setHasPermissionError] = useState(false);
   const [showSetupHelper, setShowSetupHelper] = useState(false);
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
 
   useEffect(() => {
     let mounted = true;
+
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
 
     setPermissionErrorHandler((err) => {
         if (mounted && err.code === 'permission-denied') {
@@ -47,6 +53,8 @@ const App: React.FC = () => {
 
     return () => {
         mounted = false;
+        window.removeEventListener('online', handleOnline);
+        window.removeEventListener('offline', handleOffline);
         unsubscribe();
     };
   }, []);
@@ -89,9 +97,19 @@ const App: React.FC = () => {
             </div>
         )}
 
-        <div className="fixed bottom-1 left-0 right-0 z-[120] pointer-events-none flex flex-col items-center justify-center opacity-40 select-none pb-[env(safe-area-inset-bottom)]">
-             <span className="text-[8px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest drop-shadow-sm leading-tight">Version Beta</span>
-             <span className="text-[7px] font-bold text-slate-400 dark:text-slate-500 italic leading-tight">powered by Satria JM</span>
+        <div className="fixed bottom-1 left-0 right-0 z-[120] pointer-events-none flex flex-col items-center justify-center opacity-80 select-none pb-[env(safe-area-inset-bottom)] transition-all">
+             {/* Network Status Indicator */}
+             <div className={`flex items-center gap-1.5 mb-1 px-2 py-0.5 rounded-full backdrop-blur-sm ${isOnline ? 'bg-emerald-500/10' : 'bg-red-500/10'}`}>
+                <div className={`w-1.5 h-1.5 rounded-full ${isOnline ? 'bg-emerald-500 shadow-[0_0_5px_rgba(16,185,129,0.5)]' : 'bg-red-500 shadow-[0_0_5px_rgba(239,68,68,0.5)]'}`}></div>
+                <span className={`text-[8px] font-bold uppercase tracking-widest ${isOnline ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500'}`}>
+                    {isOnline ? 'System Online' : 'Offline Mode'}
+                </span>
+             </div>
+             
+             <div className="opacity-40 flex flex-col items-center">
+                 <span className="text-[8px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest drop-shadow-sm leading-tight">Version Beta</span>
+                 <span className="text-[7px] font-bold text-slate-400 dark:text-slate-500 italic leading-tight">powered by Satria JM</span>
+             </div>
         </div>
 
         {showSetupHelper && (
