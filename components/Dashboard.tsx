@@ -12,7 +12,13 @@ import {
 import { AuditRecord, AppView, MasterItem, LocationState, MasterLocation } from '../types';
 import { Logo } from './Logo';
 import * as XLSX from 'xlsx';
-import { Pencil, Trash2, X, Save, AlertTriangle, Image as ImageIcon, ZoomIn } from 'lucide-react';
+import { 
+  Pencil, Trash2, X, Save, AlertTriangle, 
+  Image as ImageIcon, ZoomIn, Search, 
+  CheckCircle2, Package, MapPin, Clock, 
+  BarChart3, Info, ChevronRight, LayoutDashboard,
+  ArrowUpRight, ArrowDownRight, Minus
+} from 'lucide-react';
 
 interface DashboardProps {
   onNavigate: (view: AppView) => void;
@@ -22,6 +28,7 @@ interface GroupedItem {
   sku: string;
   name: string;
   unit: string;
+  category: string;
   logs: AuditRecord[];
   totalSystem: number;
   totalPhysical: number;
@@ -53,15 +60,14 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
     totalAudited: 0,
     totalLocations: 0,
     locAudited: 0,
-    locEmpty: 0,
-    locDamaged: 0,
+    shortageCount: 0,
+    surplusCount: 0,
     netVariance: 0,
-    accuracy: "100",
-    criticalItems: 0
+    accuracy: "100"
   });
 
   const [searchQuery, setSearchQuery] = useState('');
-  const [activeFilter, setActiveFilter] = useState<'all' | 'shortage' | 'surplus'>('all');
+  const [activeFilter, setActiveFilter] = useState<'all' | 'shortage' | 'surplus' | 'matched'>('all');
 
   const dataRefs = React.useRef<{
     logs: AuditRecord[];
@@ -90,11 +96,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
         masterMap.get(m.sku)?.push(m);
     });
 
-    const getSystemStock = (sku: string) => {
-        const items = masterMap.get(sku) || [];
-        return items.reduce((sum, item) => sum + item.systemStock, 0);
-    };
-
     const groups: Record<string, GroupedItem> = {};
     combinedLogs.forEach(log => {
         if (!groups[log.sku]) {
@@ -104,8 +105,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
                 sku: log.sku,
                 name: log.itemName,
                 unit: m?.unit || 'Pcs',
+                category: m?.category || 'General',
                 logs: [],
-                totalSystem: getSystemStock(log.sku),
+                totalSystem: items?.reduce((sum, i) => sum + i.systemStock, 0) || 0,
                 totalPhysical: 0, 
                 variance: 0,
                 status: 'matched',
@@ -117,24 +119,23 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
         groups[log.sku].totalPhysical += log.physicalQty; 
     });
 
-    let globalVariance = 0, criticalCount = 0, totalAuditQty = 0;
+    let globalVariance = 0, shortageItems = 0, surplusItems = 0, totalAuditQty = 0;
     const finalGroups = Object.values(groups).map(g => {
         g.variance = g.totalPhysical - g.totalSystem;
         globalVariance += g.variance;
         totalAuditQty += g.totalPhysical;
-        if (g.variance < 0) { g.status = 'shortage'; criticalCount++; }
-        else if (g.variance > 0) { g.status = 'surplus'; }
+        if (g.variance < 0) { g.status = 'shortage'; shortageItems++; }
+        else if (g.variance > 0) { g.status = 'surplus'; surplusItems++; }
+        else { g.status = 'matched'; }
         g.locationsCount = new Set(g.logs.map(l => l.location)).size;
         return g;
     });
 
     setGroupedData(finalGroups);
 
-    let la = 0, le = 0, ld = 0;
+    let la = 0;
     Object.values(states).forEach((s: LocationState) => {
         if (s.status === 'audited') la++;
-        if (s.status === 'empty') le++;
-        if (s.status === 'damaged') ld++;
     });
 
     const accurateItems = finalGroups.filter(g => g.variance === 0).length;
@@ -144,11 +145,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
         totalAudited: totalAuditQty,
         totalLocations: locations.length || 1,
         locAudited: la,
-        locEmpty: le,
-        locDamaged: ld,
+        shortageCount: shortageItems,
+        surplusCount: surplusItems,
         netVariance: globalVariance,
-        accuracy: accuracyStr,
-        criticalItems: criticalCount
+        accuracy: accuracyStr
     });
     setLoading(false);
   }, []);
@@ -243,14 +243,13 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
             "Expired": log.expiryDate,
             "Team": log.teamMember,
             "Catatan": log.notes || '-',
-            "Jumlah Foto": log.evidencePhotos?.length || 0,
-            "Data Foto (Ref)": log.evidencePhotos && log.evidencePhotos.length > 0 ? "Attached in app" : "None"
+            "Jumlah Foto": log.evidencePhotos?.length || 0
         }))
     );
     const ws = XLSX.utils.json_to_sheet(exportRows);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "AuditReport");
-    XLSX.writeFile(wb, `Stock_Opname_${new Date().toISOString().slice(0,10)}.xlsx`);
+    XLSX.writeFile(wb, `Audit_Report_${new Date().toISOString().slice(0,10)}.xlsx`);
   };
 
   const filteredGroups = groupedData.filter(g => {
@@ -260,224 +259,365 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
   });
 
   if (loading) return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-[#050A18] text-white">
+    <div className="min-h-screen flex flex-col items-center justify-center bg-background-dark text-white">
         <Logo size={80} className="animate-pulse mb-4" />
-        <p className="text-sm font-bold uppercase tracking-widest">Memuat Dashboard...</p>
+        <p className="text-sm font-bold uppercase tracking-widest text-primary">Inisialisasi Dashboard...</p>
     </div>
   );
 
   return (
-    <div className="bg-background-light dark:bg-background-dark text-slate-900 dark:text-slate-100 min-h-screen pb-24 font-display">
+    <div className="bg-[#f8fafc] dark:bg-[#050A18] text-slate-900 dark:text-slate-100 min-h-screen pb-32 font-display">
       
       {/* PHOTO LIGHTBOX */}
       {previewImage && (
-          <div className="fixed inset-0 z-[200] bg-black/95 backdrop-blur-md flex items-center justify-center p-4 animate-fade-in" onClick={() => setPreviewImage(null)}>
+          <div className="fixed inset-0 z-[200] bg-black/95 backdrop-blur-xl flex items-center justify-center p-4 animate-fade-in" onClick={() => setPreviewImage(null)}>
               <button className="absolute top-6 right-6 text-white bg-white/10 p-2 rounded-full hover:bg-white/20 transition-colors">
                   <X size={24} />
               </button>
-              <img 
-                src={previewImage} 
-                alt="Full Evidence" 
-                className="max-w-full max-h-[85vh] rounded-xl shadow-2xl object-contain"
-                onClick={(e) => e.stopPropagation()} 
-              />
+              <img src={previewImage} alt="Bukti Audit" className="max-w-full max-h-[85vh] rounded-2xl object-contain shadow-2xl" onClick={(e) => e.stopPropagation()} />
           </div>
       )}
 
+      {/* EDIT MODAL */}
       {editingLog && (
-        <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
-            <div className="bg-white dark:bg-slate-900 rounded-2xl w-full max-w-sm shadow-2xl overflow-hidden">
-                <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-primary text-white">
-                    <h3 className="font-bold flex items-center gap-2 text-sm"><Pencil size={16} /> Edit Scan</h3>
-                    <button onClick={() => setEditingLog(null)}><X size={20} /></button>
+        <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in">
+            <div className="bg-white dark:bg-slate-900 rounded-[2rem] w-full max-w-sm shadow-2xl overflow-hidden border border-white/5">
+                <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-primary text-white">
+                    <h3 className="font-bold flex items-center gap-2 text-sm"><Pencil size={18} /> Edit Data Audit</h3>
+                    <button onClick={() => setEditingLog(null)} className="p-1 hover:bg-white/10 rounded-full transition-colors"><X size={20} /></button>
                 </div>
-                <div className="p-5 space-y-4">
-                    <div className="grid grid-cols-2 gap-3">
-                        <div>
-                            <label className="text-[10px] font-bold text-slate-400 uppercase">Qty Fisik</label>
-                            <input type="number" value={editForm.physicalQty} onChange={e => setEditForm({...editForm, physicalQty: Number(e.target.value)})} className="w-full rounded-lg border-slate-200 dark:bg-slate-800 p-2 text-sm font-bold" />
+                <div className="p-6 space-y-5">
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-1.5">
+                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Jumlah Fisik</label>
+                            <input type="number" value={editForm.physicalQty} onChange={e => setEditForm({...editForm, physicalQty: Number(e.target.value)})} className="w-full rounded-2xl border-slate-200 dark:bg-slate-800 dark:border-slate-700 p-3 text-sm font-bold focus:ring-2 focus:ring-primary outline-none transition-all" />
                         </div>
-                        <div>
-                            <label className="text-[10px] font-bold text-slate-400 uppercase">Lokasi</label>
-                            <input type="text" value={editForm.location} onChange={e => setEditForm({...editForm, location: e.target.value.toUpperCase()})} className="w-full rounded-lg border-slate-200 dark:bg-slate-800 p-2 text-sm uppercase" />
+                        <div className="space-y-1.5">
+                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Lokasi Rak</label>
+                            <input type="text" value={editForm.location} onChange={e => setEditForm({...editForm, location: e.target.value.toUpperCase()})} className="w-full rounded-2xl border-slate-200 dark:bg-slate-800 dark:border-slate-700 p-3 text-sm uppercase font-bold focus:ring-2 focus:ring-primary outline-none transition-all" />
                         </div>
                     </div>
-                    <div className="grid grid-cols-2 gap-3">
-                        <div>
-                            <label className="text-[10px] font-bold text-slate-400 uppercase">Batch</label>
-                            <input type="text" value={editForm.batchNumber} onChange={e => setEditForm({...editForm, batchNumber: e.target.value})} className="w-full rounded-lg border-slate-200 dark:bg-slate-800 p-2 text-xs" />
-                        </div>
-                        <div>
-                            <label className="text-[10px] font-bold text-slate-400 uppercase">Expired</label>
-                            <input type="date" value={editForm.expiryDate} onChange={e => setEditForm({...editForm, expiryDate: e.target.value})} className="w-full rounded-lg border-slate-200 dark:bg-slate-800 p-2 text-xs" />
-                        </div>
+                    <div className="space-y-1.5">
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Catatan/Remark</label>
+                        <textarea value={editForm.notes} onChange={e => setEditForm({...editForm, notes: e.target.value})} className="w-full rounded-2xl border-slate-200 dark:bg-slate-800 dark:border-slate-700 p-4 text-xs h-24 resize-none focus:ring-2 focus:ring-primary outline-none" placeholder="Masukkan alasan selisih atau kondisi barang..."/>
                     </div>
-                    <textarea value={editForm.notes} onChange={e => setEditForm({...editForm, notes: e.target.value})} placeholder="Catatan..." className="w-full rounded-lg border-slate-200 dark:bg-slate-800 p-2 text-xs h-16" />
                 </div>
-                <div className="p-4 border-t border-slate-100 dark:border-slate-800 flex gap-3">
-                    <button onClick={() => setEditingLog(null)} className="flex-1 py-2 text-slate-500 font-bold text-sm">Batal</button>
-                    <button onClick={handleUpdateSubmit} className="flex-1 py-2 bg-primary text-white font-bold rounded-lg text-sm shadow-lg shadow-primary/20 flex items-center justify-center gap-2"><Save size={16} /> Simpan</button>
+                <div className="p-6 bg-slate-50 dark:bg-slate-950 border-t border-slate-100 dark:border-slate-800 flex gap-4">
+                    <button onClick={() => setEditingLog(null)} className="flex-1 py-3.5 text-slate-500 font-bold text-sm hover:bg-slate-100 dark:hover:bg-white/5 rounded-2xl transition-colors">Batal</button>
+                    <button onClick={handleUpdateSubmit} className="flex-[2] py-3.5 bg-primary text-white font-bold rounded-2xl text-sm shadow-xl shadow-primary/25 flex items-center justify-center gap-2 active:scale-[0.98] transition-all"><Save size={18} /> Update Data</button>
                 </div>
             </div>
         </div>
       )}
 
-      <header className="sticky top-0 z-40 bg-white/95 dark:bg-background-dark/95 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 px-4 py-3 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-            <Logo size={32} />
+      {/* HEADER */}
+      <header className="sticky top-0 z-40 bg-white/80 dark:bg-[#050A18]/80 backdrop-blur-xl border-b border-slate-200 dark:border-slate-800 px-5 py-4 flex items-center justify-between">
+        <div className="flex items-center gap-4">
+            <div className="p-1 bg-primary/10 rounded-xl">
+                <Logo size={40} />
+            </div>
             <div>
-                <h1 className="text-sm font-black uppercase tracking-tight text-slate-900 dark:text-white leading-none">Monitoring</h1>
-                <p className="text-[9px] font-bold text-primary uppercase tracking-widest mt-0.5">MEDIKA BINA INVESTAMA</p>
+                <h1 className="text-base font-black uppercase tracking-tight text-slate-900 dark:text-white leading-none">Smart Dashboard</h1>
+                <p className="text-[9px] font-bold text-primary uppercase tracking-[0.2em] mt-1.5">MEDIKA BINA INVESTAMA</p>
             </div>
         </div>
-        <button onClick={handleExportReport} className="p-2 bg-blue-50 text-primary rounded-full hover:bg-blue-100 transition-colors">
-            <span className="material-symbols-outlined">download</span>
-        </button>
+        <div className="flex items-center gap-2">
+            <button onClick={handleExportReport} className="w-11 h-11 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-emerald-600 rounded-2xl flex items-center justify-center hover:shadow-lg active:scale-90 transition-all shadow-sm">
+                <span className="material-symbols-outlined text-[24px]">sim_card_download</span>
+            </button>
+        </div>
       </header>
 
-      {errorStatus && (
-          <div className="bg-amber-600 text-white text-[10px] font-bold py-1 px-4 text-center animate-pulse">
-              {errorStatus}
-          </div>
-      )}
-
-      <section className="px-4 pt-4">
-        <div className="bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm border border-slate-200 dark:border-slate-700 flex items-center gap-4">
-            <div className="w-12 h-12 rounded-xl bg-blue-50 dark:bg-blue-900/30 flex items-center justify-center text-primary">
-                <span className="material-symbols-outlined text-2xl">person</span>
+      {/* SUMMARY DASHBOARD CARDS */}
+      <section className="px-5 pt-6 grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="group bg-white dark:bg-slate-900 p-5 rounded-[2rem] shadow-sm border border-slate-200 dark:border-slate-800 hover:border-primary/50 transition-colors">
+                <div className="flex items-center justify-between mb-2">
+                    <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest">Total Fisik</p>
+                    <div className="bg-primary/10 text-primary p-2 rounded-xl group-hover:scale-110 transition-transform">
+                        <Package size={18} />
+                    </div>
+                </div>
+                <p className="text-3xl font-black text-slate-900 dark:text-white leading-none">{stats.totalAudited.toLocaleString()}</p>
+                <p className="text-[10px] text-slate-500 font-bold mt-2 uppercase tracking-tight">Units Audited</p>
             </div>
-            <div className="flex-1">
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Team Member</label>
+
+            <div className="group bg-white dark:bg-slate-900 p-5 rounded-[2rem] shadow-sm border border-slate-200 dark:border-slate-800 hover:border-emerald-500/50 transition-colors">
+                <div className="flex items-center justify-between mb-2">
+                    <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest">Akurasi (%)</p>
+                    <div className="bg-emerald-500/10 text-emerald-500 p-2 rounded-xl group-hover:scale-110 transition-transform">
+                        <CheckCircle2 size={18} />
+                    </div>
+                </div>
+                <p className="text-3xl font-black text-emerald-500 leading-none">{stats.accuracy}%</p>
+                <p className="text-[10px] text-slate-500 font-bold mt-2 uppercase tracking-tight">Data Validity</p>
+            </div>
+
+            <div className="group bg-white dark:bg-slate-900 p-5 rounded-[2rem] shadow-sm border border-slate-200 dark:border-slate-800 hover:border-red-500/50 transition-colors">
+                <div className="flex items-center justify-between mb-2">
+                    <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest">Selisih Item</p>
+                    <div className="bg-red-500/10 text-red-500 p-2 rounded-xl group-hover:scale-110 transition-transform">
+                        <AlertTriangle size={18} />
+                    </div>
+                </div>
+                <p className="text-3xl font-black text-red-500 leading-none">{stats.shortageCount + stats.surplusCount}</p>
+                <p className="text-[10px] text-slate-500 font-bold mt-2 uppercase tracking-tight">Requires Check</p>
+            </div>
+
+            <div className="group bg-white dark:bg-slate-900 p-5 rounded-[2rem] shadow-sm border border-slate-200 dark:border-slate-800 hover:border-slate-400 transition-colors">
+                <div className="flex items-center justify-between mb-2">
+                    <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest">Net Var</p>
+                    <div className={`p-2 rounded-xl group-hover:scale-110 transition-transform ${stats.netVariance < 0 ? 'bg-red-500/10 text-red-500' : stats.netVariance > 0 ? 'bg-primary/10 text-primary' : 'bg-slate-100 text-slate-400'}`}>
+                        <BarChart3 size={18} />
+                    </div>
+                </div>
+                <div className="flex items-baseline gap-1">
+                    <p className={`text-3xl font-black leading-none ${stats.netVariance < 0 ? 'text-red-500' : stats.netVariance > 0 ? 'text-primary' : 'text-slate-900 dark:text-white'}`}>
+                        {stats.netVariance > 0 ? '+' : ''}{stats.netVariance}
+                    </p>
+                    {stats.netVariance !== 0 && (
+                        <span className="text-xs">
+                            {stats.netVariance > 0 ? <ArrowUpRight size={14} className="text-primary"/> : <ArrowDownRight size={14} className="text-red-500"/>}
+                        </span>
+                    )}
+                </div>
+                <p className="text-[10px] text-slate-500 font-bold mt-2 uppercase tracking-tight">Total Variance</p>
+            </div>
+      </section>
+
+      {/* SEARCH & FILTERS - STICKY COMPACT */}
+      <section className="px-5 mt-8 sticky top-[80px] z-30 bg-[#f8fafc]/80 dark:bg-[#050A18]/80 backdrop-blur-md pb-4">
+        <div className="flex flex-col sm:flex-row gap-4">
+            <div className="flex-1 bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 flex items-center px-4 h-12 ring-1 ring-black/5">
+                <Search size={18} className="text-slate-400" />
                 <input 
-                    type="text" 
-                    value={teamName}
-                    onChange={(e) => { setTeamName(e.target.value); localStorage.setItem('team_member_name', e.target.value); }}
-                    className="w-full bg-transparent border-none p-0 text-sm font-bold text-slate-900 dark:text-white focus:ring-0"
-                    placeholder="Input nama petugas..."
+                    type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
+                    className="flex-1 bg-transparent border-none text-sm p-3 focus:ring-0 outline-none font-medium placeholder:text-slate-400" 
+                    placeholder="Search SKU, Name or Location..." 
                 />
+                {searchQuery && (
+                    <button onClick={() => setSearchQuery('')} className="p-1 text-slate-400 hover:text-slate-600"><X size={16}/></button>
+                )}
+            </div>
+            <div className="flex gap-2 overflow-x-auto no-scrollbar scroll-smooth py-1">
+                {[
+                    { id: 'all', label: 'All Items', color: 'primary' },
+                    { id: 'shortage', label: 'Shortage', color: 'red-500' },
+                    { id: 'surplus', label: 'Surplus', color: 'blue-500' },
+                    { id: 'matched', label: 'Matched', color: 'emerald-500' }
+                ].map((f) => (
+                    <button 
+                        key={f.id}
+                        onClick={() => setActiveFilter(f.id as any)} 
+                        className={`px-5 h-10 rounded-2xl text-[10px] font-black uppercase tracking-widest border transition-all flex-shrink-0 flex items-center gap-2 ${
+                            activeFilter === f.id 
+                            ? `bg-${f.color === 'primary' ? 'primary' : f.color} text-white border-transparent shadow-lg` 
+                            : 'bg-white dark:bg-slate-900 text-slate-500 border-slate-200 dark:border-slate-800 hover:bg-slate-50'
+                        }`}
+                    >
+                        {f.id === 'matched' && <CheckCircle2 size={12}/>}
+                        {f.id === 'shortage' && <ArrowDownRight size={12}/>}
+                        {f.id === 'surplus' && <ArrowUpRight size={12}/>}
+                        {f.label}
+                    </button>
+                ))}
             </div>
         </div>
       </section>
 
-      <section className="grid grid-cols-2 gap-3 px-4 py-4">
-            <div className="bg-white dark:bg-slate-800 p-4 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700">
-                <p className="text-slate-400 text-[10px] font-bold uppercase tracking-wider mb-1">Total Items</p>
-                <p className="text-2xl font-black text-primary">{stats.totalAudited}</p>
+      {/* SKU LIST - NEW MODERN CARDS */}
+      <main className="px-5 space-y-4 mt-2">
+        {filteredGroups.length === 0 ? (
+            <div className="py-24 text-center flex flex-col items-center justify-center space-y-4 opacity-30">
+                <div className="w-20 h-20 bg-slate-200 dark:bg-slate-800 rounded-full flex items-center justify-center">
+                    <Search size={40} className="text-slate-400" />
+                </div>
+                <div className="space-y-1">
+                    <p className="text-base font-black uppercase tracking-widest text-slate-900 dark:text-white">No items found</p>
+                    <p className="text-xs font-medium">Try adjusting your filters or search keywords</p>
+                </div>
             </div>
-            <div className="bg-white dark:bg-slate-800 p-4 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700">
-                <p className="text-slate-400 text-[10px] font-bold uppercase tracking-wider mb-1">Accuracy</p>
-                <p className="text-2xl font-black">{stats.accuracy}%</p>
-            </div>
-      </section>
-
-      <section className="px-4 pb-4">
-        <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 flex items-center px-4 py-1">
-            <span className="material-symbols-outlined text-slate-400">search</span>
-            <input 
-                type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
-                className="flex-1 bg-transparent border-none text-sm p-3 focus:ring-0" 
-                placeholder="Search SKU or Name..." 
-            />
-        </div>
-        <div className="flex gap-2 mt-3 overflow-x-auto no-scrollbar">
-            <button onClick={() => setActiveFilter('all')} className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest border transition-all ${activeFilter === 'all' ? 'bg-primary text-white border-primary shadow-lg shadow-primary/20' : 'bg-white text-slate-500 border-slate-200'}`}>All Items</button>
-            <button onClick={() => setActiveFilter('shortage')} className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest border transition-all ${activeFilter === 'shortage' ? 'bg-red-600 text-white border-red-600 shadow-lg shadow-red-500/20' : 'bg-white text-slate-500 border-slate-200'}`}>Shortage</button>
-            <button onClick={() => setActiveFilter('surplus')} className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest border transition-all ${activeFilter === 'surplus' ? 'bg-blue-600 text-white border-blue-600 shadow-lg shadow-blue-500/20' : 'bg-white text-slate-500 border-slate-200'}`}>Surplus</button>
-        </div>
-      </section>
-
-      <main className="px-4 space-y-3 pb-4">
-        {filteredGroups.map(group => (
-            <details key={group.sku} className="group bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden shadow-sm transition-all duration-300">
-                <summary className="list-none p-4 cursor-pointer flex justify-between items-center hover:bg-slate-50 transition-colors">
-                    <div className="flex gap-3 items-center">
-                        <div className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400">
-                            <span className="material-symbols-outlined">inventory_2</span>
-                        </div>
-                        <div>
-                            <h3 className="text-xs font-black uppercase tracking-tight leading-none mb-1">{group.name}</h3>
-                            <p className="text-[10px] font-mono text-slate-400">{group.sku}</p>
-                        </div>
-                    </div>
-                    <div className="text-right">
-                        <p className={`text-xs font-black ${group.variance < 0 ? 'text-red-600' : group.variance > 0 ? 'text-primary' : 'text-emerald-500'}`}>
-                            {group.totalPhysical} / {group.totalSystem}
-                        </p>
-                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">Variance: {group.variance}</p>
-                    </div>
-                </summary>
-                <div className="p-4 bg-slate-50 dark:bg-slate-950/50 border-t border-slate-100 dark:border-slate-800 space-y-3">
-                    {group.logs.map(log => (
-                        <div key={log.id} className="bg-white dark:bg-slate-900 p-3 rounded-xl border border-slate-200 dark:border-slate-800 flex flex-col gap-3 shadow-sm">
-                            <div className="flex justify-between items-start gap-3">
-                                <div className="flex-1">
-                                    <div className="flex items-center gap-1.5 mb-1">
-                                        <span className="material-symbols-outlined text-sm text-primary">location_on</span>
-                                        <span className="text-xs font-black">{log.location}</span>
+        ) : filteredGroups.map(group => {
+            const isShortage = group.status === 'shortage';
+            const isSurplus = group.status === 'surplus';
+            const isMatched = group.status === 'matched';
+            
+            const accentColor = isShortage ? 'bg-red-500' : isSurplus ? 'bg-blue-500' : 'bg-emerald-500';
+            const textColor = isShortage ? 'text-red-600' : isSurplus ? 'text-blue-600' : 'text-emerald-600';
+            const bgColor = isShortage ? 'bg-red-50' : isSurplus ? 'bg-blue-50' : 'bg-emerald-50';
+            
+            const progress = Math.min(100, (group.totalPhysical / Math.max(1, group.totalSystem)) * 100);
+            
+            return (
+                <details key={group.sku} className="group bg-white dark:bg-slate-900 rounded-[2rem] border border-slate-200 dark:border-slate-800 overflow-hidden shadow-sm hover:shadow-md transition-all duration-300">
+                    <summary className="list-none cursor-pointer select-none">
+                        <div className="flex items-stretch min-h-[100px]">
+                            {/* Color Indicator Strip */}
+                            <div className={`w-2 ${accentColor}`}></div>
+                            
+                            <div className="flex-1 p-5 flex flex-col justify-between">
+                                <div className="flex justify-between items-start gap-4">
+                                    <div className="min-w-0">
+                                        <div className="flex items-center gap-2 mb-2 flex-wrap">
+                                            <span className="text-[10px] font-mono font-bold text-slate-500 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-lg border border-slate-200/50 dark:border-slate-700/50">{group.sku}</span>
+                                            <span className={`px-2.5 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-tight flex items-center gap-1 ${bgColor} ${textColor} dark:bg-opacity-10`}>
+                                                {isMatched && <CheckCircle2 size={10}/>}
+                                                {isShortage && <ArrowDownRight size={10}/>}
+                                                {isSurplus && <ArrowUpRight size={10}/>}
+                                                {group.status}
+                                            </span>
+                                        </div>
+                                        <h3 className="text-sm font-black uppercase tracking-tight line-clamp-1 text-slate-800 dark:text-white">{group.name}</h3>
                                     </div>
-                                    <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest">
-                                        Batch: {log.batchNumber} • ED: {log.expiryDate}
-                                    </p>
-                                    {log.notes && (
-                                        <p className="text-[10px] text-slate-500 mt-2 italic bg-slate-50 dark:bg-slate-800/50 p-1.5 rounded leading-tight border-l-2 border-primary/30">
-                                            "{log.notes}"
+                                    <div className="text-right flex-shrink-0">
+                                        <div className="flex items-baseline justify-end gap-1">
+                                            <span className="text-lg font-black leading-none text-slate-900 dark:text-white">{group.totalPhysical}</span>
+                                            <span className="text-[10px] font-bold text-slate-400 uppercase">/ {group.totalSystem}</span>
+                                        </div>
+                                        <p className={`text-[11px] font-black mt-1.5 flex items-center justify-end gap-1 ${group.variance < 0 ? 'text-red-500' : group.variance > 0 ? 'text-blue-500' : 'text-emerald-500'}`}>
+                                            {group.variance === 0 ? <Minus size={12}/> : (group.variance > 0 ? <ArrowUpRight size={12}/> : <ArrowDownRight size={12}/>)}
+                                            {group.variance !== 0 ? Math.abs(group.variance) : 'Balance'}
                                         </p>
-                                    )}
+                                    </div>
                                 </div>
-                                <div className="flex flex-col items-end gap-2">
-                                    <span className="text-sm font-black text-slate-900 dark:text-white">{log.physicalQty} <span className="text-[9px] text-slate-400">{group.unit}</span></span>
-                                    <div className="flex gap-1">
-                                        <button onClick={(e) => handleEditClick(log, e)} className="p-1.5 bg-slate-100 dark:bg-slate-800 text-slate-500 rounded-lg hover:bg-blue-50 hover:text-blue-600 transition-colors"><Pencil size={12} /></button>
-                                        <button onClick={(e) => handleDelete(log.id, e)} className="p-1.5 bg-slate-100 dark:bg-slate-800 text-slate-500 rounded-lg hover:bg-red-50 hover:text-red-600 transition-colors"><Trash2 size={12} /></button>
+
+                                {/* Modern Progress Bar */}
+                                <div className="mt-4">
+                                    <div className="flex justify-between items-center mb-1.5">
+                                        <div className="flex items-center gap-2">
+                                            <div className={`w-1.5 h-1.5 rounded-full ${accentColor}`}></div>
+                                            <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Accuracy Level</span>
+                                        </div>
+                                        <span className={`text-[10px] font-black ${textColor}`}>{progress.toFixed(0)}%</span>
+                                    </div>
+                                    <div className="h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden border border-slate-200/30 dark:border-slate-700/30">
+                                        <div 
+                                            className={`h-full transition-all duration-1000 ease-out shadow-[0_0_10px_rgba(0,0,0,0.1)] ${accentColor}`} 
+                                            style={{ width: `${progress}%` }}
+                                        ></div>
                                     </div>
                                 </div>
                             </div>
+                            <div className="w-12 flex items-center justify-center text-slate-300 group-open:rotate-180 transition-transform">
+                                <ChevronRight size={20} />
+                            </div>
+                        </div>
+                    </summary>
 
-                            {/* PHOTO GALLERY SECTION */}
-                            {log.evidencePhotos && log.evidencePhotos.length > 0 && (
-                                <div className="border-t border-slate-100 dark:border-slate-800 pt-3">
-                                    <div className="flex items-center gap-1.5 mb-2">
-                                        <ImageIcon size={12} className="text-primary" />
-                                        <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">Bukti Foto ({log.evidencePhotos.length})</span>
+                    {/* EXPANDED TIMELINE AUDIT LOGS */}
+                    <div className="bg-slate-50 dark:bg-slate-950/40 border-t border-slate-100 dark:border-slate-800 p-6 space-y-5 animate-fade-in">
+                        <div className="flex items-center justify-between px-1">
+                            <div className="flex items-center gap-2">
+                                <Clock size={14} className="text-slate-400" />
+                                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Audit Activity Log</span>
+                            </div>
+                            <span className="text-[9px] font-bold text-slate-400">{group.logs.length} Scans</span>
+                        </div>
+                        
+                        <div className="relative space-y-4 before:absolute before:left-[19px] before:top-2 before:bottom-2 before:w-[2px] before:bg-slate-200 dark:before:bg-slate-800">
+                            {group.logs.map((log, idx) => (
+                                <div key={log.id} className="relative pl-12">
+                                    {/* Timeline Marker */}
+                                    <div className={`absolute left-0 top-0 w-10 h-10 rounded-xl flex items-center justify-center border-4 border-slate-50 dark:border-slate-950 z-10 ${accentColor} text-white shadow-lg shadow-black/10`}>
+                                        <MapPin size={18} />
                                     </div>
-                                    <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
-                                        {log.evidencePhotos.map((photo, pIdx) => (
-                                            <div 
-                                                key={pIdx} 
-                                                className="relative flex-shrink-0 w-20 h-20 rounded-lg overflow-hidden border border-slate-200 dark:border-slate-700 bg-slate-100 cursor-pointer group"
-                                                onClick={() => setPreviewImage(photo)}
-                                            >
-                                                <img src={photo} className="w-full h-full object-cover transition-transform group-hover:scale-110" alt="Evidence" />
-                                                <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                                                    <ZoomIn size={16} className="text-white" />
+
+                                    <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm group/log hover:border-primary/40 transition-colors">
+                                        <div className="flex flex-col sm:flex-row justify-between items-start gap-4">
+                                            <div className="flex-1 space-y-1">
+                                                <div className="flex items-center gap-3">
+                                                    <h4 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-tight">{log.location}</h4>
+                                                    <div className="flex items-center gap-1.5 text-slate-400">
+                                                        <Clock size={12}/>
+                                                        <span className="text-[10px] font-bold">{new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                                                    </div>
+                                                </div>
+                                                <div className="flex flex-wrap gap-2 pt-1">
+                                                    <span className="bg-slate-100 dark:bg-slate-800 text-slate-500 px-2 py-0.5 rounded text-[9px] font-bold uppercase">Batch: {log.batchNumber}</span>
+                                                    <span className="bg-slate-100 dark:bg-slate-800 text-slate-500 px-2 py-0.5 rounded text-[9px] font-bold uppercase">EXP: {log.expiryDate}</span>
                                                 </div>
                                             </div>
-                                        ))}
+                                            
+                                            <div className="flex items-center sm:flex-col items-end gap-3 self-stretch justify-between sm:justify-start">
+                                                <div className="text-right">
+                                                    <p className="text-base font-black text-slate-900 dark:text-white">{log.physicalQty} <span className="text-[10px] text-slate-400 uppercase">{group.unit}</span></p>
+                                                    <div className="flex items-center justify-end gap-1.5 mt-0.5">
+                                                        <div className="w-4 h-4 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center overflow-hidden">
+                                                            <span className="text-[7px] font-black text-slate-500 uppercase">{log.teamMember.charAt(0)}</span>
+                                                        </div>
+                                                        <span className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">{log.teamMember}</span>
+                                                    </div>
+                                                </div>
+                                                <div className="flex gap-2">
+                                                    <button onClick={(e) => handleEditClick(log, e)} className="p-2.5 bg-slate-50 dark:bg-slate-800 text-slate-400 rounded-xl hover:text-primary hover:bg-primary/5 transition-all"><Pencil size={14} /></button>
+                                                    <button onClick={(e) => handleDelete(log.id, e)} className="p-2.5 bg-slate-50 dark:bg-slate-800 text-slate-400 rounded-xl hover:text-red-500 hover:bg-red-500/5 transition-all"><Trash2 size={14} /></button>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {log.notes && (
+                                            <div className="mt-4 flex gap-3 items-start bg-blue-50/50 dark:bg-blue-900/10 p-4 rounded-2xl border border-blue-100/50 dark:border-blue-900/20">
+                                                <Info size={16} className="text-primary flex-shrink-0" />
+                                                <p className="text-[11px] text-slate-600 dark:text-slate-400 italic font-medium leading-relaxed">"{log.notes}"</p>
+                                            </div>
+                                        )}
+
+                                        {log.evidencePhotos && log.evidencePhotos.length > 0 && (
+                                            <div className="mt-5 space-y-2">
+                                                <div className="flex items-center gap-2 px-1">
+                                                    <ImageIcon size={12} className="text-slate-400"/>
+                                                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Visual Proof ({log.evidencePhotos.length})</span>
+                                                </div>
+                                                <div className="flex gap-3 overflow-x-auto no-scrollbar pb-1 pt-1">
+                                                    {log.evidencePhotos.map((photo, pIdx) => (
+                                                        <div 
+                                                            key={pIdx} 
+                                                            onClick={() => setPreviewImage(photo)}
+                                                            className="relative w-20 h-20 rounded-2xl overflow-hidden border-2 border-slate-100 dark:border-slate-800 bg-slate-100 flex-shrink-0 group/photo cursor-zoom-in hover:border-primary/50 transition-all shadow-sm"
+                                                        >
+                                                            <img src={photo} className="w-full h-full object-cover group-hover/photo:scale-110 transition-transform duration-500" alt="Evidence" />
+                                                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/photo:opacity-100 transition-opacity flex items-center justify-center backdrop-blur-[2px]">
+                                                                <ZoomIn size={18} className="text-white" />
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
-                            )}
+                            ))}
                         </div>
-                    ))}
-                </div>
-            </details>
-        ))}
+                    </div>
+                </details>
+            );
+        })}
       </main>
 
-      <nav className="fixed bottom-0 w-full bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-slate-200 dark:border-slate-800 pb-safe pt-2 px-6 z-40">
-        <div className="flex justify-between items-center h-16 max-w-md mx-auto">
-            <button className="flex flex-col items-center gap-1 text-primary">
-                <span className="material-symbols-outlined filled">dashboard</span>
-                <span className="text-[9px] font-black uppercase tracking-widest">Home</span>
+      {/* BOTTOM NAV - FLOATING DOCK STYLE */}
+      <nav className="fixed bottom-6 left-6 right-6 z-40 bg-white/80 dark:bg-slate-900/80 backdrop-blur-2xl border border-white/20 dark:border-white/5 rounded-[2.5rem] p-3 shadow-2xl shadow-black/20 ring-1 ring-black/5">
+        <div className="flex justify-around items-center h-14 max-w-md mx-auto relative">
+            <button className="flex flex-col items-center gap-1 group">
+                <div className="w-10 h-10 rounded-2xl bg-primary/10 text-primary flex items-center justify-center transition-all group-active:scale-90">
+                    <LayoutDashboard size={20} className="fill-current" />
+                </div>
+                <span className="text-[9px] font-black uppercase tracking-widest text-primary">Beranda</span>
             </button>
-            <button onClick={() => onNavigate(AppView.FORM)} className="w-14 h-14 bg-primary text-white rounded-2xl flex items-center justify-center shadow-xl shadow-primary/40 -mt-8 border-4 border-white dark:border-slate-900 active:scale-90 transition-all">
-                <span className="material-symbols-outlined text-3xl">qr_code_scanner</span>
+            
+            <button onClick={() => onNavigate(AppView.FORM)} className="w-16 h-16 bg-primary text-white rounded-3xl flex items-center justify-center shadow-xl shadow-primary/40 -mt-16 border-[6px] border-slate-50 dark:border-[#050A18] active:scale-90 active:rotate-12 transition-all">
+                <span className="material-symbols-outlined text-[32px]">add_a_photo</span>
             </button>
-            <button onClick={() => onNavigate(AppView.MASTER_DATA)} className="flex flex-col items-center gap-1 text-slate-400">
-                <span className="material-symbols-outlined">database</span>
-                <span className="text-[9px] font-black uppercase tracking-widest">Data</span>
+            
+            <button onClick={() => onNavigate(AppView.MASTER_DATA)} className="flex flex-col items-center gap-1 group">
+                <div className="w-10 h-10 rounded-2xl bg-slate-100 dark:bg-slate-800 text-slate-400 flex items-center justify-center transition-all group-hover:text-slate-600 dark:group-hover:text-slate-200 group-active:scale-90">
+                    <span className="material-symbols-outlined text-[20px]">database</span>
+                </div>
+                <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">Database</span>
             </button>
         </div>
       </nav>
+      
+      {/* Footer Branding Overlay */}
+      <div className="fixed bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-slate-200/50 dark:from-black/50 to-transparent pointer-events-none z-30"></div>
     </div>
   );
 };
