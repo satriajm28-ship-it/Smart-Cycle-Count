@@ -16,7 +16,7 @@ export const Logo: React.FC<LogoProps> = ({ className, size = 100 }) => {
       xmlns="http://www.w3.org/2000/svg"
       className={className}
     >
-      {/* Head - Blue Circle at the top */}
+      {/* Head - Blue Circle at the top center */}
       <circle 
         cx="256" 
         cy="120" 
@@ -25,7 +25,7 @@ export const Logo: React.FC<LogoProps> = ({ className, size = 100 }) => {
       />
       
       {/* Right side body - Cyan Pill (Underneath) */}
-      <g transform="translate(351, 305) rotate(45)">
+      <g transform="translate(325, 300) rotate(-45)">
         <rect 
           x="-55" 
           y="-135" 
@@ -37,7 +37,7 @@ export const Logo: React.FC<LogoProps> = ({ className, size = 100 }) => {
       </g>
       
       {/* Left side body - Pink Pill (On Top) */}
-      <g transform="translate(161, 305) rotate(-45)">
+      <g transform="translate(187, 300) rotate(45)">
         <rect 
           x="-55" 
           y="-135" 
