@@ -27,8 +27,7 @@ const LOCAL_KEYS = {
   MASTER_DATA: 'local_master_data',
   AUDIT_LOGS: 'local_audit_logs',
   LOCATIONS: 'local_locations',
-  STATES: 'local_states',
-  OFFLINE_QUEUE: 'offline_audit_queue'
+  STATES: 'local_states'
 };
 
 let onPermissionError: ((error: FirestoreError) => void) | null = null;
@@ -52,42 +51,6 @@ export const setLocal = (key: string, data: any) => {
     } catch (e) {
         console.warn("LocalStorage full or disabled");
     }
-};
-
-export const getOfflineQueueCount = (): number => {
-    return getLocal<AuditRecord[]>(LOCAL_KEYS.OFFLINE_QUEUE, []).length;
-};
-
-export const getOfflineRecords = (): AuditRecord[] => {
-    return getLocal<AuditRecord[]>(LOCAL_KEYS.OFFLINE_QUEUE, []);
-};
-
-export const syncOfflineQueue = async (onProgress?: (remaining: number) => void): Promise<void> => {
-    const queue = getLocal<AuditRecord[]>(LOCAL_KEYS.OFFLINE_QUEUE, []);
-    if (queue.length === 0) return;
-
-    const remainingQueue: AuditRecord[] = [];
-    for (const record of queue) {
-        try {
-            await setDoc(doc(db, COLLECTIONS.AUDIT_LOGS, record.id), record);
-            const state: LocationState = {
-                locationId: record.location,
-                status: 'audited',
-                timestamp: record.timestamp,
-                photoUrl: record.evidencePhotos?.[0],
-                description: record.notes || undefined,
-                reportedBy: record.teamMember
-            };
-            await setDoc(doc(db, COLLECTIONS.LOCATION_STATES, record.location), state, { merge: true });
-        } catch (error) {
-            console.error("Failed to sync record:", record.id, error);
-            remainingQueue.push(record);
-        }
-    }
-
-    setLocal(LOCAL_KEYS.OFFLINE_QUEUE, remainingQueue);
-    window.dispatchEvent(new Event('auditDataChanged'));
-    if (onProgress) onProgress(remainingQueue.length);
 };
 
 export const subscribeToAuditLogs = (onUpdate: (data: AuditRecord[]) => void, onError?: (error: FirestoreError) => void) => {
@@ -174,28 +137,7 @@ export const deleteAllMasterData = async (onStatus?: (msg: string) => void) => {
 };
 
 export const saveAuditLog = async (record: AuditRecord) => {
-  // 1. Update cache lokal dulu agar UI terasa cepat (Optimistic Update)
-  const currentLogs = getLocal<AuditRecord[]>(LOCAL_KEYS.AUDIT_LOGS, []);
-  setLocal(LOCAL_KEYS.AUDIT_LOGS, [record, ...currentLogs.filter(l => l.id !== record.id)]);
-  
-  const currentStates = getLocal<Record<string, LocationState>>(LOCAL_KEYS.STATES, {});
-  currentStates[record.location] = {
-      locationId: record.location,
-      status: 'audited',
-      timestamp: record.timestamp,
-      photoUrl: record.evidencePhotos?.[0],
-      description: record.notes,
-      reportedBy: record.teamMember
-  };
-  setLocal(LOCAL_KEYS.STATES, currentStates);
-
-  // Tambahkan ke antrean offline
-  const queue = getOfflineRecords();
-  setLocal(LOCAL_KEYS.OFFLINE_QUEUE, [record, ...queue]);
-  
-  window.dispatchEvent(new Event('auditDataChanged'));
-
-  // 2. Coba upload ke Firestore
+  // Save directly to Firestore
   try {
       await setDoc(doc(db, COLLECTIONS.AUDIT_LOGS, record.id), record);
       await setDoc(doc(db, COLLECTIONS.LOCATION_STATES, record.location), {
@@ -206,36 +148,35 @@ export const saveAuditLog = async (record: AuditRecord) => {
           description: record.notes,
           reportedBy: record.teamMember
       }, { merge: true });
-
-      // Jika berhasil, hapus dari antrean offline
-      const updatedQueue = getOfflineRecords().filter(q => q.id !== record.id);
-      setLocal(LOCAL_KEYS.OFFLINE_QUEUE, updatedQueue);
+      
+      window.dispatchEvent(new Event('auditDataChanged'));
   } catch (error: any) {
-      console.error("Cloud sync failed (will retry later):", error);
-      // Jika error karena ukuran (1MB limit), beri tahu user
+      console.error("Cloud save failed:", error);
       if (error.code === 'out-of-range' || error.message?.includes('too large')) {
           throw new Error("Data terlalu besar (Foto terlalu banyak/besar). Mohon kurangi jumlah foto.");
       }
-      // Error lain (koneksi dll) tetap biarkan di queue offline
+      throw error;
   }
 };
 
 export const updateAuditLog = async (id: string, updates: Partial<AuditRecord>) => {
-    const logs = getLocal<AuditRecord[]>(LOCAL_KEYS.AUDIT_LOGS, []);
-    setLocal(LOCAL_KEYS.AUDIT_LOGS, logs.map(l => l.id === id ? { ...l, ...updates } : l));
-    window.dispatchEvent(new Event('auditDataChanged'));
     try {
         await updateDoc(doc(db, COLLECTIONS.AUDIT_LOGS, id), updates);
-    } catch (e) {}
+        window.dispatchEvent(new Event('auditDataChanged'));
+    } catch (e) {
+        console.error("Update failed:", e);
+        throw e;
+    }
 };
 
 export const deleteAuditLog = async (id: string) => {
-    const logs = getLocal<AuditRecord[]>(LOCAL_KEYS.AUDIT_LOGS, []);
-    setLocal(LOCAL_KEYS.AUDIT_LOGS, logs.filter(l => l.id !== id));
-    window.dispatchEvent(new Event('auditDataChanged'));
     try {
         await deleteDoc(doc(db, COLLECTIONS.AUDIT_LOGS, id));
-    } catch (e) {}
+        window.dispatchEvent(new Event('auditDataChanged'));
+    } catch (e) {
+        console.error("Cloud delete failed:", e);
+        throw e;
+    }
 };
 
 export const updateLocationStatus = async (
@@ -247,12 +188,11 @@ export const updateLocationStatus = async (
         locationId: locationName, status, timestamp: Date.now(),
         photoUrl: data?.photoUrl, description: data?.description, reportedBy: data?.teamMember
     };
-    const currentStates = getLocal<Record<string, LocationState>>(LOCAL_KEYS.STATES, {});
-    currentStates[locationName] = state;
-    setLocal(LOCAL_KEYS.STATES, currentStates);
     try {
         await setDoc(doc(db, COLLECTIONS.LOCATION_STATES, locationName), state, { merge: true });
-    } catch (e) {}
+    } catch (e) {
+        console.error("Location status update failed:", e);
+    }
 };
 
 export const getAuditLogs = async (): Promise<AuditRecord[]> => getLocal<AuditRecord[]>(LOCAL_KEYS.AUDIT_LOGS, []);

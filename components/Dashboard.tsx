@@ -6,8 +6,7 @@ import {
   getMasterLocations, 
   subscribeToLocationStates,
   deleteAuditLog,
-  updateAuditLog,
-  getOfflineRecords
+  updateAuditLog
 } from '../services/storageService';
 import { AuditRecord, AppView, MasterItem, LocationState, MasterLocation } from '../types';
 import { Logo } from './Logo';
@@ -84,11 +83,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
   const processDashboardData = useCallback(() => {
     const { logs, master, locations, states } = dataRefs.current;
     
-    const offlineLogs = getOfflineRecords();
-    const allLogsMap = new Map<string, AuditRecord>();
-    offlineLogs.forEach(l => allLogsMap.set(l.id, l));
-    logs.forEach(l => allLogsMap.set(l.id, l));
-    const combinedLogs = Array.from(allLogsMap.values());
+    // Process online logs directly
+    const combinedLogs = logs;
 
     const masterMap = new Map<string, MasterItem[]>();
     master.forEach(m => {
@@ -161,7 +157,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
 
     const handleListenerError = (err: any) => {
         if (err.code === 'permission-denied') {
-            setErrorStatus("Akses Dibatasi - Menggunakan Data Lokal");
+            setErrorStatus("Akses Dibatasi - Hubungi Admin");
         }
     };
 
@@ -195,9 +191,11 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
       if (window.confirm("Hapus data scan ini?")) {
           try {
               await deleteAuditLog(id);
+              dataRefs.current.logs = dataRefs.current.logs.filter(l => l.id !== id);
               processDashboardData();
           } catch (error) {
-              alert("Gagal menghapus.");
+              console.error("Delete failed:", error);
+              alert("Gagal menghapus data.");
           }
       }
   };
@@ -224,6 +222,11 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
               expiryDate: editForm.expiryDate,
               notes: editForm.notes
           });
+          
+          dataRefs.current.logs = dataRefs.current.logs.map(l => 
+              l.id === editingLog.id ? { ...l, ...editForm } : l
+          );
+          
           setEditingLog(null);
           processDashboardData();
       } catch (error) {

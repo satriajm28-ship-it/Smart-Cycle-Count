@@ -8,7 +8,7 @@ import { DamagedReport } from './components/DamagedReport';
 import { Logo } from './components/Logo';
 import { auth } from './services/firebaseConfig';
 import * as firebaseAuth from 'firebase/auth';
-import { setPermissionErrorHandler, syncOfflineQueue, getOfflineQueueCount } from './services/storageService';
+import { setPermissionErrorHandler } from './services/storageService';
 
 const { onAuthStateChanged, signInAnonymously } = firebaseAuth as any;
 
@@ -18,9 +18,6 @@ const App: React.FC = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [hasPermissionError, setHasPermissionError] = useState(false);
   const [showSetupHelper, setShowSetupHelper] = useState(false);
-  
-  const [isSyncing, setIsSyncing] = useState(false);
-  const [pendingCount, setPendingCount] = useState(0);
 
   useEffect(() => {
     let mounted = true;
@@ -34,7 +31,6 @@ const App: React.FC = () => {
     const unsubscribe = onAuthStateChanged(auth, (user: any) => {
       if (user) {
         if (mounted) setIsAuthenticated(true);
-        triggerSync();
       } else {
         signInAnonymously(auth)
             .catch((error: any) => {
@@ -48,33 +44,12 @@ const App: React.FC = () => {
             });
       }
     });
-    
-    const handleOnline = () => {
-        triggerSync();
-    };
-    
-    window.addEventListener('online', handleOnline);
-    setPendingCount(getOfflineQueueCount());
 
     return () => {
         mounted = false;
         unsubscribe();
-        window.removeEventListener('online', handleOnline);
     };
   }, []);
-
-  const triggerSync = async () => {
-      const count = getOfflineQueueCount();
-      if (count > 0) {
-          setIsSyncing(true);
-          setPendingCount(count);
-          await syncOfflineQueue((remaining) => {
-              setPendingCount(remaining);
-          });
-          setIsSyncing(false);
-          setPendingCount(getOfflineQueueCount());
-      }
-  };
 
   const navigate = (newView: AppView, params?: any) => {
     setNavParams(params);
@@ -111,23 +86,6 @@ const App: React.FC = () => {
                 >
                     Fix Permissions
                 </button>
-            </div>
-        )}
-
-        {(isSyncing || pendingCount > 0) && !hasPermissionError && (
-            <div className={`px-4 py-1 text-[10px] font-bold text-center sticky top-0 z-[90] flex items-center justify-center gap-2 shadow-sm transition-colors ${isSyncing ? 'bg-blue-600 text-white' : 'bg-slate-200 text-slate-600'}`}>
-                {isSyncing ? (
-                    <>
-                        <span className="material-symbols-outlined text-sm animate-spin">sync</span>
-                        <span>Syncing {pendingCount} offline records...</span>
-                    </>
-                ) : (
-                    <>
-                        <span className="material-symbols-outlined text-sm">cloud_off</span>
-                        <span>{pendingCount} records pending upload</span>
-                        <button onClick={triggerSync} className="ml-2 underline hover:text-slate-900">Retry</button>
-                    </>
-                )}
             </div>
         )}
 
@@ -205,7 +163,7 @@ service cloud.firestore {
                             onClick={() => setShowSetupHelper(false)}
                             className="flex-1 py-3 text-slate-500 font-bold hover:bg-slate-200 dark:hover:bg-slate-800 rounded-xl transition-colors text-sm"
                         >
-                            Lanjutkan Mode Lokal
+                            Lanjutkan Mode Online
                         </button>
                     </div>
                 </div>
