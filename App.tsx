@@ -5,8 +5,8 @@ import { AuditForm } from './components/AuditForm';
 import { Dashboard } from './components/Dashboard';
 import { MasterData } from './components/MasterData';
 import { DamagedReport } from './components/DamagedReport';
+import { Logo } from './components/Logo';
 import { auth } from './services/firebaseConfig';
-// Using namespace import and casting to handle potential v8/v9 type definition mismatches
 import * as firebaseAuth from 'firebase/auth';
 import { setPermissionErrorHandler, syncOfflineQueue, getOfflineQueueCount } from './services/storageService';
 
@@ -19,25 +19,21 @@ const App: React.FC = () => {
   const [hasPermissionError, setHasPermissionError] = useState(false);
   const [showSetupHelper, setShowSetupHelper] = useState(false);
   
-  // Sync State
   const [isSyncing, setIsSyncing] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
 
   useEffect(() => {
     let mounted = true;
 
-    // Listen for global permission errors from storageService
     setPermissionErrorHandler((err) => {
         if (mounted && err.code === 'permission-denied') {
             setHasPermissionError(true);
         }
     });
 
-    // Listen for auth state changes
     const unsubscribe = onAuthStateChanged(auth, (user: any) => {
       if (user) {
         if (mounted) setIsAuthenticated(true);
-        // Attempt sync on load if user is authenticated
         triggerSync();
       } else {
         signInAnonymously(auth)
@@ -53,9 +49,7 @@ const App: React.FC = () => {
       }
     });
     
-    // Online/Offline Listeners
     const handleOnline = () => {
-        console.log("Device is online. Triggering sync...");
         triggerSync();
     };
     
@@ -89,16 +83,24 @@ const App: React.FC = () => {
 
   if (!isAuthenticated) {
     return (
-        <div className="flex flex-col items-center justify-center min-h-screen bg-[#f6f6f8] text-slate-500 gap-3">
-            <span className="material-symbols-outlined animate-spin text-4xl text-primary">security</span>
-            <p className="font-medium animate-pulse">Establishing Connection...</p>
+        <div className="flex flex-col items-center justify-center min-h-screen bg-[#050A18] text-white gap-8">
+            <div className="relative animate-pulse">
+                <Logo size={180} />
+            </div>
+            <div className="text-center space-y-2">
+                <h1 className="text-4xl font-black uppercase tracking-widest">Monitoring</h1>
+                <p className="text-lg font-bold text-slate-400 tracking-wider">MEDIKA BINA INVESTAMA</p>
+            </div>
+            <div className="flex flex-col items-center gap-2 mt-8">
+                <span className="material-symbols-outlined animate-spin text-2xl text-primary">sync</span>
+                <p className="text-xs font-medium text-slate-500 uppercase tracking-tighter">Establishing Connection...</p>
+            </div>
         </div>
     );
   }
 
   return (
     <div className="min-h-screen bg-[#f6f6f8] relative">
-        {/* Connection Warning Banner */}
         {hasPermissionError && (
             <div className="bg-amber-600 text-white px-4 py-2 text-[10px] sm:text-xs font-bold text-center sticky top-0 z-[100] flex items-center justify-center gap-2 shadow-lg">
                 <span className="material-symbols-outlined text-sm">database_off</span>
@@ -112,31 +114,28 @@ const App: React.FC = () => {
             </div>
         )}
 
-        {/* Sync Indicator */}
         {(isSyncing || pendingCount > 0) && !hasPermissionError && (
             <div className={`px-4 py-1 text-[10px] font-bold text-center sticky top-0 z-[90] flex items-center justify-center gap-2 shadow-sm transition-colors ${isSyncing ? 'bg-blue-600 text-white' : 'bg-slate-200 text-slate-600'}`}>
                 {isSyncing ? (
                     <>
                         <span className="material-symbols-outlined text-sm animate-spin">sync</span>
-                        <span>Syncing {pendingCount} offline records to cloud...</span>
+                        <span>Syncing {pendingCount} offline records...</span>
                     </>
                 ) : (
                     <>
                         <span className="material-symbols-outlined text-sm">cloud_off</span>
-                        <span>{pendingCount} records pending upload (waiting for connection)</span>
+                        <span>{pendingCount} records pending upload</span>
                         <button onClick={triggerSync} className="ml-2 underline hover:text-slate-900">Retry</button>
                     </>
                 )}
             </div>
         )}
 
-        {/* WATERMARK - Positioned at Bottom Center */}
         <div className="fixed bottom-1 left-0 right-0 z-[120] pointer-events-none flex flex-col items-center justify-center opacity-40 select-none pb-[env(safe-area-inset-bottom)]">
              <span className="text-[8px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest drop-shadow-sm leading-tight">Version Beta</span>
              <span className="text-[7px] font-bold text-slate-400 dark:text-slate-500 italic leading-tight">powered by Satria JM</span>
         </div>
 
-        {/* Setup Helper Modal */}
         {showSetupHelper && (
             <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-md animate-fade-in">
                 <div className="bg-white dark:bg-slate-900 rounded-3xl w-full max-w-xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
@@ -191,12 +190,6 @@ service cloud.firestore {
                                     <span className="material-symbols-outlined text-sm">content_copy</span>
                                 </button>
                             </div>
-                        </div>
-
-                        <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800 p-4 rounded-xl">
-                            <p className="text-[10px] text-blue-700 dark:text-blue-300 font-medium leading-relaxed">
-                                <b>Mengapa ini terjadi?</b> Google Firebase secara default memblokir semua akses database untuk keamanan. Kode di atas mengizinkan aplikasi (melalui login anonim) untuk menyimpan data Stock Opname Anda.
-                            </p>
                         </div>
                     </div>
 
