@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { saveAuditLog, getAuditLogs, getMasterData } from '../services/storageService';
-import { MasterItem, AuditRecord } from '../types';
+import { saveAuditLog, getMasterData } from '../services/storageService';
+import { MasterItem } from '../types';
 import { v4 as uuidv4 } from 'uuid';
 import { ScannerModal } from './ScannerModal';
 import { Logo } from './Logo';
@@ -33,50 +33,35 @@ export const AuditForm: React.FC<AuditFormProps> = ({ onSuccess, initialLocation
   const scannedOverrides = useRef<{ batch?: string; expiry?: string }>({});
 
   useEffect(() => {
-      if (teamName) localStorage.setItem('team_member_name', teamName);
+    if (teamName) localStorage.setItem('team_member_name', teamName);
   }, [teamName]);
 
   useEffect(() => {
     let mounted = true;
     const initData = async () => {
-        setLoadingData(true);
-        try {
-            const items = await getMasterData();
-            if (mounted) setAllMasterItems(items);
-        } catch (err) {
-            console.error(err);
-        } finally {
-            if (mounted) setLoadingData(false);
-        }
+      setLoadingData(true);
+      try {
+        const items = await getMasterData();
+        if (mounted) setAllMasterItems(items);
+      } catch (err) {
+        console.error("Error loading master data:", err);
+      } finally {
+        if (mounted) setLoadingData(false);
+      }
     };
     initData();
     return () => { mounted = false; };
   }, []);
 
   useEffect(() => {
-    const timer = setInterval(() => setTimestamp(new Date()), 60000); 
-    return () => clearInterval(timer);
-  }, []);
-
-  useEffect(() => {
     if (loadingData) return;
-
     if (sku.length >= 3) {
       const matchingItems = allMasterItems.filter(i => i.sku.toLowerCase() === sku.toLowerCase());
       const item = matchingItems.length > 0 ? matchingItems[0] : null;
       setFoundItem(item || null);
-
       if (item) {
-        if (scannedOverrides.current.batch) setBatchNumber(scannedOverrides.current.batch);
-        else setBatchNumber(item.batchNumber);
-
-        if (scannedOverrides.current.expiry) setExpiryDate(scannedOverrides.current.expiry);
-        else setExpiryDate(item.expiryDate);
-        
-        scannedOverrides.current = {};
-      } else {
-        if (scannedOverrides.current.batch) setBatchNumber(scannedOverrides.current.batch);
-        if (scannedOverrides.current.expiry) setExpiryDate(scannedOverrides.current.expiry);
+        setBatchNumber(scannedOverrides.current.batch || item.batchNumber);
+        setExpiryDate(scannedOverrides.current.expiry || item.expiryDate);
         scannedOverrides.current = {};
       }
     } else {
@@ -96,54 +81,56 @@ export const AuditForm: React.FC<AuditFormProps> = ({ onSuccess, initialLocation
   const percentDiff = (systemStock > 0) ? (Math.abs(variance) / systemStock) * 100 : (globalTotal > 0 ? 100 : 0);
   const isSignificant = percentDiff > 10;
 
-  const handleSkuInput = (val: string) => {
-    if (val.includes(',')) {
-        const parts = val.split(',');
-        if (parts.length >= 1) setSku(parts[0].trim());
-        if (parts.length >= 2) {
-            const b = parts[1].trim();
-            setBatchNumber(b);
-            scannedOverrides.current.batch = b;
+  // Helper function to compress images before saving
+  const compressImage = (base64Str: string): Promise<string> => {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.src = base64Str;
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const MAX_WIDTH = 800;
+        const MAX_HEIGHT = 800;
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height) {
+          if (width > MAX_WIDTH) {
+            height *= MAX_WIDTH / width;
+            width = MAX_WIDTH;
+          }
+        } else {
+          if (height > MAX_HEIGHT) {
+            width *= MAX_HEIGHT / height;
+            height = MAX_HEIGHT;
+          }
         }
-        if (parts.length >= 3) {
-            let rawDate = parts[2].trim();
-            if (rawDate.length === 8 && !rawDate.includes('-')) {
-                rawDate = `${rawDate.substring(4, 8)}-${rawDate.substring(2, 4)}-${rawDate.substring(0, 2)}`;
-            }
-            setExpiryDate(rawDate);
-            scannedOverrides.current.expiry = rawDate;
-        }
-        return;
-    }
-    setSku(val);
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx?.drawImage(img, 0, 0, width, height);
+        // Reduce quality to 0.7 to significantly reduce file size for Firestore
+        resolve(canvas.toDataURL('image/jpeg', 0.7));
+      };
+    });
   };
 
-  const handleScanSuccess = (decodedText: string) => {
-    if (scannerType === 'sku') handleSkuInput(decodedText);
-    else if (scannerType === 'location') setLocation(decodedText.toUpperCase());
-    setScannerType(null);
-  };
-
-  const handlePhotoCapture = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handlePhotoCapture = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-        if (evidencePhotos.length >= 5) {
-            alert("Maksimal 5 foto bukti.");
-            return;
-        }
-        const reader = new FileReader();
-        reader.onloadend = () => { 
-            if (reader.result) {
-                setEvidencePhotos(prev => [...prev, reader.result as string]);
-            } 
-        };
-        reader.readAsDataURL(file);
+      if (evidencePhotos.length >= 5) {
+        alert("Maksimal 5 foto bukti.");
+        return;
+      }
+      const reader = new FileReader();
+      reader.onloadend = async () => { 
+        if (reader.result) {
+          const compressed = await compressImage(reader.result as string);
+          setEvidencePhotos(prev => [...prev, compressed]);
+        } 
+      };
+      reader.readAsDataURL(file);
     }
     if (e.target) e.target.value = '';
-  };
-
-  const removePhoto = (index: number) => {
-      setEvidencePhotos(prev => prev.filter((_, i) => i !== index));
   };
 
   const handleSubmit = async () => {
@@ -151,48 +138,53 @@ export const AuditForm: React.FC<AuditFormProps> = ({ onSuccess, initialLocation
     if (!sku) { alert("Mohon scan barang."); return; }
     if (!location) { alert("Mohon isi lokasi rak."); return; }
     if (isSignificant && evidencePhotos.length === 0) { 
-        alert("Foto bukti wajib diisi untuk selisih signifikan!"); 
-        // Scroll to photo section
-        const photoEl = document.getElementById('photo-section');
-        photoEl?.scrollIntoView({ behavior: 'smooth' });
-        return; 
+      alert("Foto bukti wajib diisi untuk selisih signifikan!"); 
+      document.getElementById('photo-section')?.scrollIntoView({ behavior: 'smooth' });
+      return; 
     }
     
     setIsSubmitting(true);
     try {
-        await saveAuditLog({
-          id: uuidv4(),
-          sku, 
-          itemName: activeItemName, 
-          location, 
-          batchNumber: batchNumber || 'N/A', 
-          expiryDate: expiryDate || 'N/A',
-          systemQty: systemStock, 
-          physicalQty, 
-          variance, 
-          timestamp: Date.now(), 
-          teamMember: teamName, 
-          notes, 
-          evidencePhotos
-        }); 
-        onSuccess();
-    } catch (err) {
-        alert("Gagal menyimpan data. Periksa koneksi internet.");
+      const auditRecord = {
+        id: uuidv4(),
+        sku, 
+        itemName: activeItemName, 
+        location: location.toUpperCase(), 
+        batchNumber: batchNumber || 'N/A', 
+        expiryDate: expiryDate || 'N/A',
+        systemQty: systemStock, 
+        physicalQty: physicalQty, 
+        variance: variance, 
+        timestamp: Date.now(), 
+        teamMember: teamName || 'Petugas', 
+        notes: notes, 
+        evidencePhotos: evidencePhotos
+      };
+      
+      await saveAuditLog(auditRecord); 
+      onSuccess();
+    } catch (err: any) {
+      console.error("Submission error:", err);
+      alert(`Gagal menyimpan: ${err.message || "Periksa koneksi internet"}`);
     } finally {
-        setIsSubmitting(false);
+      setIsSubmitting(false);
     }
   };
 
   if (loadingData) return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-[#050A18] text-white">
-          <Logo size={80} className="animate-pulse mb-4" />
-          <span className="text-sm font-bold uppercase tracking-widest">Loading Data...</span>
-      </div>
+    <div className="flex flex-col items-center justify-center min-h-screen bg-[#050A18] text-white">
+      <Logo size={80} className="animate-pulse mb-4" />
+      <span className="text-sm font-bold uppercase tracking-widest">Memuat Sistem...</span>
+    </div>
   );
 
   return (
     <div className="bg-background-light dark:bg-background-dark text-slate-900 dark:text-white font-display min-h-screen flex flex-col antialiased">
-        <ScannerModal isOpen={!!scannerType} onClose={() => setScannerType(null)} onScanSuccess={handleScanSuccess} title={scannerType === 'sku' ? "Scan Barang" : "Scan Lokasi"} />
+        <ScannerModal isOpen={!!scannerType} onClose={() => setScannerType(null)} onScanSuccess={(text) => {
+          if (scannerType === 'sku') setSku(text);
+          else setLocation(text.toUpperCase());
+          setScannerType(null);
+        }} title={scannerType === 'sku' ? "Scan Barang" : "Scan Lokasi"} />
 
         <nav className="sticky top-0 z-20 bg-background-light/95 dark:bg-background-dark/95 backdrop-blur-sm border-b border-slate-200 dark:border-slate-800 px-4 py-3 flex items-center justify-between">
             <button onClick={onSuccess} className="w-10 h-10 rounded-full hover:bg-slate-200 dark:hover:bg-slate-800 flex items-center justify-center">
@@ -209,18 +201,11 @@ export const AuditForm: React.FC<AuditFormProps> = ({ onSuccess, initialLocation
         </nav>
 
         <main className="flex-1 px-4 pt-4 pb-48 max-w-lg mx-auto w-full">
-            <div className="flex items-center justify-end mb-6">
-                <div className="flex items-center gap-1.5 px-3 py-1 bg-slate-200 dark:bg-slate-800 rounded-full">
-                    <span className="material-symbols-outlined text-[16px] text-slate-500">schedule</span>
-                    <p className="text-xs font-medium text-slate-600 dark:text-slate-300">{timestamp.toLocaleDateString()} {timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
-                </div>
-            </div>
-
             <section className="mb-6">
                 <h3 className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-2 px-1">Petugas</h3>
                 <div className="bg-white dark:bg-slate-800 rounded-xl p-3 shadow-sm border border-slate-100 dark:border-slate-700 flex items-center gap-3">
                     <div className="w-10 h-10 rounded-lg bg-blue-50 dark:bg-blue-900/30 flex items-center justify-center text-primary">
-                        <span className="material-symbols-outlined">groups</span>
+                        <span className="material-symbols-outlined">person</span>
                     </div>
                     <input className="text-sm font-bold bg-transparent border-none p-0 focus:ring-0 w-full" value={teamName} onChange={(e) => setTeamName(e.target.value)} placeholder="Nama Petugas..." />
                 </div>
@@ -228,14 +213,11 @@ export const AuditForm: React.FC<AuditFormProps> = ({ onSuccess, initialLocation
 
             <section className="mb-6 space-y-4">
                 <h3 className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-2 px-1">Item Details</h3>
-                <div>
-                    <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5">Kode Barang</label>
-                    <div className="relative flex items-center">
-                        <input className="w-full h-12 pl-4 pr-14 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 font-mono text-sm" placeholder="Scan item..." type="text" value={sku} onChange={(e) => handleSkuInput(e.target.value)} />
-                        <button onClick={() => setScannerType('sku')} className="absolute right-1 top-1 bottom-1 w-12 bg-primary text-white rounded-lg flex items-center justify-center shadow-lg shadow-primary/20">
-                            <span className="material-symbols-outlined">barcode_scanner</span>
-                        </button>
-                    </div>
+                <div className="relative flex items-center">
+                    <input className="w-full h-12 pl-4 pr-14 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 font-mono text-sm" placeholder="Scan Kode Barang..." type="text" value={sku} onChange={(e) => setSku(e.target.value)} />
+                    <button onClick={() => setScannerType('sku')} className="absolute right-1 top-1 bottom-1 w-12 bg-primary text-white rounded-lg flex items-center justify-center shadow-lg shadow-primary/20">
+                        <span className="material-symbols-outlined">barcode_scanner</span>
+                    </button>
                 </div>
                 
                 <div className="bg-white dark:bg-slate-800/50 rounded-xl p-4 border border-slate-200 dark:border-slate-700 shadow-sm space-y-4">
@@ -258,13 +240,11 @@ export const AuditForm: React.FC<AuditFormProps> = ({ onSuccess, initialLocation
 
             <section className="mb-6">
                 <h3 className="text-[10px] font-semibold text-primary uppercase tracking-wider mb-2 px-1">Lokasi Rak</h3>
-                <div className="bg-white dark:bg-slate-800 rounded-xl p-3 shadow-sm border border-primary/20">
-                    <div className="relative flex items-center">
-                        <input className="w-full h-12 pl-4 pr-14 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 uppercase font-bold text-sm" placeholder="Scan Lokasi..." type="text" value={location} onChange={(e) => setLocation(e.target.value)} />
-                        <button onClick={() => setScannerType('location')} className="absolute right-1 top-1 bottom-1 w-12 bg-primary text-white rounded-lg flex items-center justify-center">
-                            <span className="material-symbols-outlined">qr_code_scanner</span>
-                        </button>
-                    </div>
+                <div className="relative flex items-center">
+                    <input className="w-full h-12 pl-4 pr-14 rounded-xl border border-primary/30 dark:border-slate-600 bg-white dark:bg-slate-800 uppercase font-bold text-sm" placeholder="Scan Lokasi..." type="text" value={location} onChange={(e) => setLocation(e.target.value.toUpperCase())} />
+                    <button onClick={() => setScannerType('location')} className="absolute right-1 top-1 bottom-1 w-12 bg-primary text-white rounded-lg flex items-center justify-center">
+                        <span className="material-symbols-outlined">qr_code_scanner</span>
+                    </button>
                 </div>
             </section>
 
@@ -283,7 +263,7 @@ export const AuditForm: React.FC<AuditFormProps> = ({ onSuccess, initialLocation
                     {foundItem && (
                         <div className={`px-4 py-3 border-t border-slate-100 dark:border-slate-700 ${isSignificant ? 'bg-red-50 dark:bg-red-900/10' : 'bg-slate-50 dark:bg-slate-900/50'}`}>
                             <div className="flex items-center justify-between">
-                                <span className="text-xs font-bold text-slate-500">Variance vs System ({systemStock})</span>
+                                <span className="text-xs font-bold text-slate-500">Variance ({systemStock})</span>
                                 <span className={`text-lg font-black ${variance < 0 ? 'text-red-600' : variance > 0 ? 'text-primary' : 'text-emerald-500'}`}>
                                     {variance > 0 ? '+' : ''}{variance}
                                 </span>
@@ -293,85 +273,37 @@ export const AuditForm: React.FC<AuditFormProps> = ({ onSuccess, initialLocation
                 </div>
             </section>
 
-            {/* FOTO BUKTI - DITEMPATKAN DI SINI AGAR TIDAK HILANG */}
             <section id="photo-section" className="mb-6">
                 <div className="flex justify-between items-center mb-2 px-1">
                     <h3 className={`text-[10px] font-bold uppercase tracking-wider ${isSignificant && evidencePhotos.length === 0 ? 'text-red-500 animate-pulse' : 'text-slate-500'}`}>
-                        Bukti Foto {isSignificant && <span className="italic ml-1">(WAJIB ADA SELISIH)</span>}
+                        Bukti Foto {isSignificant && <span className="italic ml-1">(WAJIB)</span>}
                     </h3>
-                    <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">{evidencePhotos.length}/5 Foto</span>
+                    <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">{evidencePhotos.length}/5</span>
                 </div>
-                
                 <div className="grid grid-cols-3 gap-3">
                     {evidencePhotos.map((photo, idx) => (
-                        <div key={idx} className="relative aspect-square rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 group shadow-sm bg-slate-100">
-                            <img src={photo} className="w-full h-full object-cover" alt={`Evidence ${idx + 1}`} />
-                            <button 
-                                onClick={() => removePhoto(idx)}
-                                className="absolute top-1 right-1 bg-red-600 text-white p-1 rounded-full opacity-100"
-                            >
-                                <span className="material-symbols-outlined text-xs">close</span>
-                            </button>
+                        <div key={idx} className="relative aspect-square rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 shadow-sm bg-slate-100">
+                            <img src={photo} className="w-full h-full object-cover" alt="Evidence" />
+                            <button onClick={() => setEvidencePhotos(prev => prev.filter((_, i) => i !== idx))} className="absolute top-1 right-1 bg-red-600 text-white p-1 rounded-full"><span className="material-symbols-outlined text-xs">close</span></button>
                         </div>
                     ))}
-                    
                     {evidencePhotos.length < 5 && (
-                        <button 
-                            onClick={() => fileInputRef.current?.click()}
-                            className={`aspect-square rounded-xl border-2 border-dashed flex flex-col items-center justify-center transition-all ${isSignificant && evidencePhotos.length === 0 ? 'border-red-400 bg-red-50 text-red-500' : 'border-slate-300 dark:border-slate-700 text-slate-400'}`}
-                        >
+                        <button onClick={() => fileInputRef.current?.click()} className={`aspect-square rounded-xl border-2 border-dashed flex flex-col items-center justify-center transition-all ${isSignificant && evidencePhotos.length === 0 ? 'border-red-400 bg-red-50 text-red-500' : 'border-slate-300 dark:border-slate-700 text-slate-400'}`}>
                             <span className="material-symbols-outlined text-2xl">add_a_photo</span>
                             <span className="text-[9px] font-bold uppercase mt-1">Ambil Foto</span>
                         </button>
                     )}
                 </div>
-                <input 
-                    type="file" 
-                    accept="image/*" 
-                    capture="environment" 
-                    ref={fileInputRef} 
-                    className="hidden" 
-                    onChange={handlePhotoCapture} 
-                />
-            </section>
-
-            <section className="mb-6">
-                <h3 className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-2 px-1">Catatan (Optional)</h3>
-                <textarea 
-                    className="w-full rounded-xl border-slate-200 dark:border-slate-700 dark:bg-slate-900 text-sm p-3 min-h-[80px]" 
-                    placeholder="Contoh: Barang tertumpuk, kemasan penyok..." 
-                    value={notes} 
-                    onChange={(e) => setNotes(e.target.value)}
-                />
+                <input type="file" accept="image/*" capture="environment" ref={fileInputRef} className="hidden" onChange={handlePhotoCapture} />
             </section>
         </main>
 
         <footer className="fixed bottom-0 left-0 right-0 z-30 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 p-4 pb-10 safe-area-pb shadow-[0_-4px_20px_rgba(0,0,0,0.05)]">
             <div className="max-w-lg mx-auto flex gap-3">
-                <button 
-                    disabled={isSubmitting}
-                    onClick={() => { setSku(''); setPhysicalQty(0); setEvidencePhotos([]); setNotes(''); }} 
-                    className="flex-1 h-14 rounded-2xl border border-slate-300 dark:border-slate-700 font-bold text-slate-500 hover:bg-slate-50 disabled:opacity-50"
-                >
-                    Reset
+                <button disabled={isSubmitting} onClick={() => { setSku(''); setPhysicalQty(0); setEvidencePhotos([]); }} className="flex-1 h-14 rounded-2xl border border-slate-300 dark:border-slate-700 font-bold text-slate-500 hover:bg-slate-50 disabled:opacity-50">Reset</button>
+                <button disabled={isSubmitting} onClick={handleSubmit} className={`flex-[2] h-14 rounded-2xl font-bold shadow-xl transition-all active:scale-95 flex items-center justify-center gap-2 ${isSignificant && evidencePhotos.length === 0 ? 'bg-slate-300 text-slate-500' : 'bg-primary text-white shadow-primary/30'}`}>
+                    {isSubmitting ? <><span className="material-symbols-outlined animate-spin">sync</span><span>Menyimpan...</span></> : 'Simpan Audit'}
                 </button>
-                <button 
-                    disabled={isSubmitting}
-                    onClick={handleSubmit} 
-                    className={`flex-[2] h-14 rounded-2xl font-bold shadow-xl transition-all active:scale-95 flex items-center justify-center gap-2 ${isSignificant && evidencePhotos.length === 0 ? 'bg-slate-300 text-slate-500' : 'bg-primary text-white shadow-primary/30'}`}
-                >
-                    {isSubmitting ? (
-                        <>
-                            <span className="material-symbols-outlined animate-spin">sync</span>
-                            <span>Menyimpan...</span>
-                        </>
-                    ) : (
-                        'Simpan Audit'
-                    )}
-                </button>
-            </div>
-            <div className="text-center mt-3 opacity-20 flex flex-col items-center">
-                <span className="text-[8px] font-black uppercase tracking-widest">Medika Bina Investama</span>
             </div>
         </footer>
     </div>
