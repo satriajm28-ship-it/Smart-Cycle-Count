@@ -160,7 +160,6 @@ export const getMasterLocations = async (): Promise<MasterLocation[]> => {
     return getLocal<MasterLocation[]>(LOCAL_KEYS.LOCATIONS, []);
 };
 
-// Fix: Added saveMasterData to handle bulk item uploads from Excel or Google Sheets
 export const saveMasterData = async (items: MasterItem[], onProgress?: (progress: number) => void) => {
     const batchSize = 100;
     const total = items.length;
@@ -178,11 +177,9 @@ export const saveMasterData = async (items: MasterItem[], onProgress?: (progress
         if (onProgress) onProgress(Math.round(((i + chunk.length) / total) * 100));
     }
     
-    // Update local cache
     setLocal(LOCAL_KEYS.MASTER_DATA, items);
 };
 
-// Fix: Added deleteAllMasterData to clear existing master records before a full replace import
 export const deleteAllMasterData = async (onStatus?: (msg: string) => void) => {
     const snapshot = await getDocs(collection(db, COLLECTIONS.MASTER_DATA));
     const total = snapshot.docs.length;
@@ -210,7 +207,6 @@ export const deleteAllMasterData = async (onStatus?: (msg: string) => void) => {
 export const saveAuditLog = async (record: AuditRecord) => {
   // 1. UPDATE LOCAL LOGS CACHE (INSTANT)
   const currentLogs = getLocal<AuditRecord[]>(LOCAL_KEYS.AUDIT_LOGS, []);
-  // Avoid duplicate if same ID somehow exists
   const updatedLogs = [record, ...currentLogs.filter(l => l.id !== record.id)];
   setLocal(LOCAL_KEYS.AUDIT_LOGS, updatedLogs);
 
@@ -241,9 +237,9 @@ export const saveAuditLog = async (record: AuditRecord) => {
           description: record.notes,
           teamMember: record.teamMember
       });
-      // Success: Remove from queue
+      // Success: Remove from queue (FIXED TYPO HERE: OFFIE_QUEUE -> OFFLINE_QUEUE)
       const updatedQueue = getOfflineRecords().filter(q => q.id !== record.id);
-      setLocal(LOCAL_KEYS.OFFIE_QUEUE, updatedQueue);
+      setLocal(LOCAL_KEYS.OFFLINE_QUEUE, updatedQueue);
   } catch (e) {
       console.warn("Cloud update deferred. Using local state.");
   }
@@ -298,7 +294,6 @@ export const getAuditLogs = async (): Promise<AuditRecord[]> => {
     return getLocal<AuditRecord[]>(LOCAL_KEYS.AUDIT_LOGS, []);
 };
 
-// Fix: Completed the implementation of getLocationStates to return the local states cache
 export const getLocationStates = async (): Promise<Record<string, LocationState>> => {
     return getLocal<Record<string, LocationState>>(LOCAL_KEYS.STATES, {});
 };
