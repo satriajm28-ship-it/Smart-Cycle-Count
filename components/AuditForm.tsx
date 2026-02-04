@@ -14,6 +14,7 @@ interface AuditFormProps {
 export const AuditForm: React.FC<AuditFormProps> = ({ onSuccess, initialLocation }) => {
   const [allMasterItems, setAllMasterItems] = useState<MasterItem[]>([]);
   const [loadingData, setLoadingData] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [sku, setSku] = useState('');
   const [location, setLocation] = useState(initialLocation || '');
@@ -25,7 +26,6 @@ export const AuditForm: React.FC<AuditFormProps> = ({ onSuccess, initialLocation
   const [evidencePhotos, setEvidencePhotos] = useState<string[]>([]);
   
   const [foundItem, setFoundItem] = useState<MasterItem | null>(null);
-  const [existingTotal, setExistingTotal] = useState(0);
 
   const [scannerType, setScannerType] = useState<'sku' | 'location' | null>(null);
   const [timestamp, setTimestamp] = useState(new Date());
@@ -73,22 +73,14 @@ export const AuditForm: React.FC<AuditFormProps> = ({ onSuccess, initialLocation
         if (scannedOverrides.current.expiry) setExpiryDate(scannedOverrides.current.expiry);
         else setExpiryDate(item.expiryDate);
         
-        const fetchHistory = async () => {
-            const allLogs = await getAuditLogs();
-            const history = allLogs.filter(log => log.sku === item.sku);
-            setExistingTotal(history.reduce((sum, log) => sum + log.physicalQty, 0));
-        };
-        fetchHistory();
         scannedOverrides.current = {};
       } else {
-        setExistingTotal(0);
         if (scannedOverrides.current.batch) setBatchNumber(scannedOverrides.current.batch);
         if (scannedOverrides.current.expiry) setExpiryDate(scannedOverrides.current.expiry);
         scannedOverrides.current = {};
       }
     } else {
       setFoundItem(null);
-      setExistingTotal(0);
     }
   }, [sku, loadingData, allMasterItems]);
 
@@ -101,8 +93,8 @@ export const AuditForm: React.FC<AuditFormProps> = ({ onSuccess, initialLocation
   const globalTotal = physicalQty || 0;
   const variance = globalTotal - systemStock;
   const activeItemName = foundItem ? foundItem.name : 'Unknown Item (New)';
-  const percentDiff = (systemStock > 0) ? (Math.abs(variance) / systemStock) * 100 : 0;
-  const isSignificant = systemStock > 0 && percentDiff > 10;
+  const percentDiff = (systemStock > 0) ? (Math.abs(variance) / systemStock) * 100 : (globalTotal > 0 ? 100 : 0);
+  const isSignificant = percentDiff > 10;
 
   const handleSkuInput = (val: string) => {
     if (val.includes(',')) {
@@ -135,7 +127,6 @@ export const AuditForm: React.FC<AuditFormProps> = ({ onSuccess, initialLocation
   const handlePhotoCapture = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-        // Limit to 5 photos
         if (evidencePhotos.length >= 5) {
             alert("Maksimal 5 foto bukti.");
             return;
@@ -148,7 +139,6 @@ export const AuditForm: React.FC<AuditFormProps> = ({ onSuccess, initialLocation
         };
         reader.readAsDataURL(file);
     }
-    // Reset input value to allow same file selection
     if (e.target) e.target.value = '';
   };
 
@@ -157,13 +147,18 @@ export const AuditForm: React.FC<AuditFormProps> = ({ onSuccess, initialLocation
   };
 
   const handleSubmit = async () => {
+    if (isSubmitting) return;
     if (!sku) { alert("Mohon scan barang."); return; }
     if (!location) { alert("Mohon isi lokasi rak."); return; }
     if (isSignificant && evidencePhotos.length === 0) { 
         alert("Foto bukti wajib diisi untuk selisih signifikan!"); 
+        // Scroll to photo section
+        const photoEl = document.getElementById('photo-section');
+        photoEl?.scrollIntoView({ behavior: 'smooth' });
         return; 
     }
     
+    setIsSubmitting(true);
     try {
         await saveAuditLog({
           id: uuidv4(),
@@ -183,13 +178,15 @@ export const AuditForm: React.FC<AuditFormProps> = ({ onSuccess, initialLocation
         onSuccess();
     } catch (err) {
         alert("Gagal menyimpan data. Periksa koneksi internet.");
+    } finally {
+        setIsSubmitting(false);
     }
   };
 
   if (loadingData) return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-[#050A18] text-white">
           <Logo size={80} className="animate-pulse mb-4" />
-          <span className="text-sm font-bold uppercase tracking-widest">Establishing Sync...</span>
+          <span className="text-sm font-bold uppercase tracking-widest">Loading Data...</span>
       </div>
   );
 
@@ -211,7 +208,7 @@ export const AuditForm: React.FC<AuditFormProps> = ({ onSuccess, initialLocation
             <div className="w-10"></div>
         </nav>
 
-        <main className="flex-1 px-4 pt-4 pb-40 max-w-lg mx-auto w-full">
+        <main className="flex-1 px-4 pt-4 pb-48 max-w-lg mx-auto w-full">
             <div className="flex items-center justify-end mb-6">
                 <div className="flex items-center gap-1.5 px-3 py-1 bg-slate-200 dark:bg-slate-800 rounded-full">
                     <span className="material-symbols-outlined text-[16px] text-slate-500">schedule</span>
@@ -296,20 +293,22 @@ export const AuditForm: React.FC<AuditFormProps> = ({ onSuccess, initialLocation
                 </div>
             </section>
 
-            {/* BUKTI FOTO SECTION (RESTORED) */}
-            <section className="mb-6">
+            {/* FOTO BUKTI - DITEMPATKAN DI SINI AGAR TIDAK HILANG */}
+            <section id="photo-section" className="mb-6">
                 <div className="flex justify-between items-center mb-2 px-1">
-                    <h3 className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Bukti Foto {isSignificant && <span className="text-red-500 italic ml-1">(Wajib)</span>}</h3>
+                    <h3 className={`text-[10px] font-bold uppercase tracking-wider ${isSignificant && evidencePhotos.length === 0 ? 'text-red-500 animate-pulse' : 'text-slate-500'}`}>
+                        Bukti Foto {isSignificant && <span className="italic ml-1">(WAJIB ADA SELISIH)</span>}
+                    </h3>
                     <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">{evidencePhotos.length}/5 Foto</span>
                 </div>
                 
                 <div className="grid grid-cols-3 gap-3">
                     {evidencePhotos.map((photo, idx) => (
-                        <div key={idx} className="relative aspect-square rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 group shadow-sm">
+                        <div key={idx} className="relative aspect-square rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 group shadow-sm bg-slate-100">
                             <img src={photo} className="w-full h-full object-cover" alt={`Evidence ${idx + 1}`} />
                             <button 
                                 onClick={() => removePhoto(idx)}
-                                className="absolute top-1 right-1 bg-red-600 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                                className="absolute top-1 right-1 bg-red-600 text-white p-1 rounded-full opacity-100"
                             >
                                 <span className="material-symbols-outlined text-xs">close</span>
                             </button>
@@ -319,7 +318,7 @@ export const AuditForm: React.FC<AuditFormProps> = ({ onSuccess, initialLocation
                     {evidencePhotos.length < 5 && (
                         <button 
                             onClick={() => fileInputRef.current?.click()}
-                            className={`aspect-square rounded-xl border-2 border-dashed flex flex-col items-center justify-center transition-all ${isSignificant && evidencePhotos.length === 0 ? 'border-red-400 bg-red-50 text-red-500 animate-pulse' : 'border-slate-300 dark:border-slate-700 text-slate-400'}`}
+                            className={`aspect-square rounded-xl border-2 border-dashed flex flex-col items-center justify-center transition-all ${isSignificant && evidencePhotos.length === 0 ? 'border-red-400 bg-red-50 text-red-500' : 'border-slate-300 dark:border-slate-700 text-slate-400'}`}
                         >
                             <span className="material-symbols-outlined text-2xl">add_a_photo</span>
                             <span className="text-[9px] font-bold uppercase mt-1">Ambil Foto</span>
@@ -347,19 +346,28 @@ export const AuditForm: React.FC<AuditFormProps> = ({ onSuccess, initialLocation
             </section>
         </main>
 
-        <footer className="fixed bottom-0 left-0 right-0 z-30 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 p-4 pb-10 safe-area-pb">
+        <footer className="fixed bottom-0 left-0 right-0 z-30 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 p-4 pb-10 safe-area-pb shadow-[0_-4px_20px_rgba(0,0,0,0.05)]">
             <div className="max-w-lg mx-auto flex gap-3">
                 <button 
+                    disabled={isSubmitting}
                     onClick={() => { setSku(''); setPhysicalQty(0); setEvidencePhotos([]); setNotes(''); }} 
-                    className="flex-1 h-14 rounded-2xl border border-slate-300 dark:border-slate-700 font-bold text-slate-500 hover:bg-slate-50 transition-colors"
+                    className="flex-1 h-14 rounded-2xl border border-slate-300 dark:border-slate-700 font-bold text-slate-500 hover:bg-slate-50 disabled:opacity-50"
                 >
                     Reset
                 </button>
                 <button 
+                    disabled={isSubmitting}
                     onClick={handleSubmit} 
-                    className={`flex-[2] h-14 rounded-2xl font-bold shadow-xl transition-all active:scale-95 ${isSignificant && evidencePhotos.length === 0 ? 'bg-slate-300 text-slate-500 cursor-not-allowed' : 'bg-primary text-white shadow-primary/30'}`}
+                    className={`flex-[2] h-14 rounded-2xl font-bold shadow-xl transition-all active:scale-95 flex items-center justify-center gap-2 ${isSignificant && evidencePhotos.length === 0 ? 'bg-slate-300 text-slate-500' : 'bg-primary text-white shadow-primary/30'}`}
                 >
-                    Simpan Audit
+                    {isSubmitting ? (
+                        <>
+                            <span className="material-symbols-outlined animate-spin">sync</span>
+                            <span>Menyimpan...</span>
+                        </>
+                    ) : (
+                        'Simpan Audit'
+                    )}
                 </button>
             </div>
             <div className="text-center mt-3 opacity-20 flex flex-col items-center">

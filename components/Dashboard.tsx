@@ -12,7 +12,7 @@ import {
 import { AuditRecord, AppView, MasterItem, LocationState, MasterLocation } from '../types';
 import { Logo } from './Logo';
 import * as XLSX from 'xlsx';
-import { Pencil, Trash2, X, Save, AlertTriangle } from 'lucide-react';
+import { Pencil, Trash2, X, Save, AlertTriangle, Image as ImageIcon, ZoomIn } from 'lucide-react';
 
 interface DashboardProps {
   onNavigate: (view: AppView) => void;
@@ -241,7 +241,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
             "Lokasi": log.location,
             "Batch": log.batchNumber,
             "Expired": log.expiryDate,
-            "Team": log.teamMember
+            "Team": log.teamMember,
+            "Catatan": log.notes || '-',
+            "Jumlah Foto": log.evidencePhotos?.length || 0,
+            "Data Foto (Ref)": log.evidencePhotos && log.evidencePhotos.length > 0 ? "Attached in app" : "None"
         }))
     );
     const ws = XLSX.utils.json_to_sheet(exportRows);
@@ -266,6 +269,21 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
   return (
     <div className="bg-background-light dark:bg-background-dark text-slate-900 dark:text-slate-100 min-h-screen pb-24 font-display">
       
+      {/* PHOTO LIGHTBOX */}
+      {previewImage && (
+          <div className="fixed inset-0 z-[200] bg-black/95 backdrop-blur-md flex items-center justify-center p-4 animate-fade-in" onClick={() => setPreviewImage(null)}>
+              <button className="absolute top-6 right-6 text-white bg-white/10 p-2 rounded-full hover:bg-white/20 transition-colors">
+                  <X size={24} />
+              </button>
+              <img 
+                src={previewImage} 
+                alt="Full Evidence" 
+                className="max-w-full max-h-[85vh] rounded-xl shadow-2xl object-contain"
+                onClick={(e) => e.stopPropagation()} 
+              />
+          </div>
+      )}
+
       {editingLog && (
         <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
             <div className="bg-white dark:bg-slate-900 rounded-2xl w-full max-w-sm shadow-2xl overflow-hidden">
@@ -390,23 +408,54 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
                 </summary>
                 <div className="p-4 bg-slate-50 dark:bg-slate-950/50 border-t border-slate-100 dark:border-slate-800 space-y-3">
                     {group.logs.map(log => (
-                        <div key={log.id} className="bg-white dark:bg-slate-900 p-3 rounded-xl border border-slate-200 dark:border-slate-800 flex justify-between items-start gap-3 shadow-sm">
-                            <div className="flex-1">
-                                <div className="flex items-center gap-1.5 mb-1">
-                                    <span className="material-symbols-outlined text-sm text-primary">location_on</span>
-                                    <span className="text-xs font-black">{log.location}</span>
+                        <div key={log.id} className="bg-white dark:bg-slate-900 p-3 rounded-xl border border-slate-200 dark:border-slate-800 flex flex-col gap-3 shadow-sm">
+                            <div className="flex justify-between items-start gap-3">
+                                <div className="flex-1">
+                                    <div className="flex items-center gap-1.5 mb-1">
+                                        <span className="material-symbols-outlined text-sm text-primary">location_on</span>
+                                        <span className="text-xs font-black">{log.location}</span>
+                                    </div>
+                                    <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest">
+                                        Batch: {log.batchNumber} • ED: {log.expiryDate}
+                                    </p>
+                                    {log.notes && (
+                                        <p className="text-[10px] text-slate-500 mt-2 italic bg-slate-50 dark:bg-slate-800/50 p-1.5 rounded leading-tight border-l-2 border-primary/30">
+                                            "{log.notes}"
+                                        </p>
+                                    )}
                                 </div>
-                                <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest">
-                                    Batch: {log.batchNumber} • ED: {log.expiryDate}
-                                </p>
-                            </div>
-                            <div className="flex flex-col items-end gap-2">
-                                <span className="text-sm font-black text-slate-900 dark:text-white">{log.physicalQty} <span className="text-[9px] text-slate-400">{group.unit}</span></span>
-                                <div className="flex gap-1">
-                                    <button onClick={(e) => handleEditClick(log, e)} className="p-1.5 bg-slate-100 text-slate-500 rounded-lg hover:bg-blue-50 hover:text-blue-600 transition-colors"><Pencil size={12} /></button>
-                                    <button onClick={(e) => handleDelete(log.id, e)} className="p-1.5 bg-slate-100 text-slate-500 rounded-lg hover:bg-red-50 hover:text-red-600 transition-colors"><Trash2 size={12} /></button>
+                                <div className="flex flex-col items-end gap-2">
+                                    <span className="text-sm font-black text-slate-900 dark:text-white">{log.physicalQty} <span className="text-[9px] text-slate-400">{group.unit}</span></span>
+                                    <div className="flex gap-1">
+                                        <button onClick={(e) => handleEditClick(log, e)} className="p-1.5 bg-slate-100 dark:bg-slate-800 text-slate-500 rounded-lg hover:bg-blue-50 hover:text-blue-600 transition-colors"><Pencil size={12} /></button>
+                                        <button onClick={(e) => handleDelete(log.id, e)} className="p-1.5 bg-slate-100 dark:bg-slate-800 text-slate-500 rounded-lg hover:bg-red-50 hover:text-red-600 transition-colors"><Trash2 size={12} /></button>
+                                    </div>
                                 </div>
                             </div>
+
+                            {/* PHOTO GALLERY SECTION */}
+                            {log.evidencePhotos && log.evidencePhotos.length > 0 && (
+                                <div className="border-t border-slate-100 dark:border-slate-800 pt-3">
+                                    <div className="flex items-center gap-1.5 mb-2">
+                                        <ImageIcon size={12} className="text-primary" />
+                                        <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">Bukti Foto ({log.evidencePhotos.length})</span>
+                                    </div>
+                                    <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
+                                        {log.evidencePhotos.map((photo, pIdx) => (
+                                            <div 
+                                                key={pIdx} 
+                                                className="relative flex-shrink-0 w-20 h-20 rounded-lg overflow-hidden border border-slate-200 dark:border-slate-700 bg-slate-100 cursor-pointer group"
+                                                onClick={() => setPreviewImage(photo)}
+                                            >
+                                                <img src={photo} className="w-full h-full object-cover transition-transform group-hover:scale-110" alt="Evidence" />
+                                                <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                                    <ZoomIn size={16} className="text-white" />
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     ))}
                 </div>
