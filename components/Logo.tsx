@@ -11,45 +11,42 @@ export const Logo: React.FC<LogoProps> = ({ className, size = 100 }) => {
     <svg 
       width={size} 
       height={size} 
-      viewBox="0 0 500 500" 
+      viewBox="0 0 512 512" 
       fill="none" 
       xmlns="http://www.w3.org/2000/svg"
       className={className}
     >
-      {/* Glow effects */}
-      <defs>
-        <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
-          <feGaussianBlur stdDeviation="15" result="blur" />
-          <feComposite in="SourceGraphic" in2="blur" operator="over" />
-        </filter>
-      </defs>
-
-      {/* Head / Circle */}
-      <circle cx="250" cy="130" r="50" fill="#00A3FF" filter="url(#glow)" />
-      
-      {/* Pink Shape (Left) */}
-      <rect 
-        x="235" 
-        cy="225" 
-        width="80" 
-        height="180" 
-        rx="40" 
-        transform="rotate(45 235 225)" 
-        fill="#FF007A" 
-        filter="url(#glow)" 
+      {/* Head - Blue Circle at the top */}
+      <circle 
+        cx="256" 
+        cy="120" 
+        r="60" 
+        fill="#329EFD" 
       />
       
-      {/* Cyan Shape (Right) */}
-      <rect 
-        x="265" 
-        cy="225" 
-        width="80" 
-        height="180" 
-        rx="40" 
-        transform="rotate(-45 265 225)" 
-        fill="#00E0FF" 
-        filter="url(#glow)" 
-      />
+      {/* Right side body - Cyan Pill (Underneath) */}
+      <g transform="translate(351, 305) rotate(45)">
+        <rect 
+          x="-55" 
+          y="-135" 
+          width="110" 
+          height="270" 
+          rx="55" 
+          fill="#3ED4F7" 
+        />
+      </g>
+      
+      {/* Left side body - Pink Pill (On Top) */}
+      <g transform="translate(161, 305) rotate(-45)">
+        <rect 
+          x="-55" 
+          y="-135" 
+          width="110" 
+          height="270" 
+          rx="55" 
+          fill="#F93F77" 
+        />
+      </g>
     </svg>
   );
 };
