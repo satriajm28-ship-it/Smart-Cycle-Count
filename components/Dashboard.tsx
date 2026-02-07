@@ -7,7 +7,8 @@ import {
   subscribeToLocationStates,
   deleteAuditLog,
   updateAuditLog,
-  resetAllAuditData
+  resetAllAuditData,
+  restoreAuditData
 } from '../services/storageService';
 import { AuditRecord, AppView, MasterItem, LocationState, MasterLocation } from '../types';
 import { Logo } from './Logo';
@@ -17,7 +18,8 @@ import {
   Image as ImageIcon, ZoomIn, Search, 
   CheckCircle2, Package, MapPin, Clock, 
   BarChart3, Info, ChevronRight, LayoutDashboard,
-  ArrowUpRight, ArrowDownRight, Minus, RefreshCw
+  ArrowUpRight, ArrowDownRight, Minus, RefreshCw,
+  RotateCcw
 } from 'lucide-react';
 
 interface DashboardProps {
@@ -56,8 +58,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
 
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   
-  // State for Reset Process
+  // State for Reset/Restore Process
   const [isResetting, setIsResetting] = useState(false);
+  const [isRestoring, setIsRestoring] = useState(false);
   
   const [stats, setStats] = useState({
     totalAudited: 0,
@@ -239,17 +242,29 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
   };
 
   const handleResetAllData = async () => {
-      if (window.confirm("PERINGATAN: Tindakan ini akan MENGHAPUS SEMUA DATA SCAN hasil audit (Logs & Status Lokasi).\n\nDatabase Barang (Master Data) TIDAK akan terhapus.\n\nApakah Anda yakin ingin melanjutkan?")) {
-          if (window.confirm("KONFIRMASI TERAKHIR: Data yang dihapus TIDAK BISA dikembalikan.\n\nLanjutkan reset?")) {
-              setIsResetting(true);
-              try {
-                  await resetAllAuditData();
-                  alert("Data berhasil di-reset. Siap untuk sesi audit baru.");
-              } catch (e: any) {
-                  alert(e.message || "Gagal melakukan reset.");
-              } finally {
-                  setIsResetting(false);
-              }
+      if (window.confirm("PERINGATAN: Tindakan ini akan MEMINDAHKAN SEMUA DATA SCAN saat ini ke Backup dan mengosongkan Dashboard.\n\nDatabase Barang (Master Data) AMAN.\n\nLanjutkan reset?")) {
+          setIsResetting(true);
+          try {
+              await resetAllAuditData();
+              alert("Data berhasil di-reset. Siap untuk sesi audit baru.");
+          } catch (e: any) {
+              alert(e.message || "Gagal melakukan reset.");
+          } finally {
+              setIsResetting(false);
+          }
+      }
+  };
+
+  const handleRestoreData = async () => {
+      if (window.confirm("KEMBALIKAN DATA?\n\nTindakan ini akan mengambil data dari BACKUP TERAKHIR dan menggabungkannya kembali ke Dashboard.\n\nApakah Anda yakin?")) {
+          setIsRestoring(true);
+          try {
+              await restoreAuditData();
+              alert("Data berhasil dikembalikan dari backup!");
+          } catch (e: any) {
+              alert(e.message || "Gagal mengembalikan data.");
+          } finally {
+              setIsRestoring(false);
           }
       }
   };
@@ -346,9 +361,17 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
         </div>
         <div className="flex items-center gap-2">
             <button 
+                onClick={handleRestoreData}
+                disabled={isRestoring || isResetting}
+                title="Kembalikan Data (Undo Reset)"
+                className="w-11 h-11 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-500 rounded-2xl flex items-center justify-center hover:bg-slate-50 hover:border-slate-300 active:scale-90 transition-all shadow-sm disabled:opacity-50"
+            >
+                {isRestoring ? <RefreshCw className="animate-spin" size={20} /> : <RotateCcw size={20} />}
+            </button>
+            <button 
                 onClick={handleResetAllData}
-                disabled={isResetting}
-                title="Reset Semua Data Scan"
+                disabled={isResetting || isRestoring}
+                title="Reset & Backup Data"
                 className="w-11 h-11 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-red-500 rounded-2xl flex items-center justify-center hover:bg-red-50 hover:border-red-200 active:scale-90 transition-all shadow-sm disabled:opacity-50"
             >
                 {isResetting ? <RefreshCw className="animate-spin" size={20} /> : <Trash2 size={20} />}
