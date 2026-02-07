@@ -6,7 +6,8 @@ import {
   getMasterLocations, 
   subscribeToLocationStates,
   deleteAuditLog,
-  updateAuditLog
+  updateAuditLog,
+  resetAllAuditData
 } from '../services/storageService';
 import { AuditRecord, AppView, MasterItem, LocationState, MasterLocation } from '../types';
 import { Logo } from './Logo';
@@ -16,7 +17,7 @@ import {
   Image as ImageIcon, ZoomIn, Search, 
   CheckCircle2, Package, MapPin, Clock, 
   BarChart3, Info, ChevronRight, LayoutDashboard,
-  ArrowUpRight, ArrowDownRight, Minus
+  ArrowUpRight, ArrowDownRight, Minus, RefreshCw
 } from 'lucide-react';
 
 interface DashboardProps {
@@ -54,6 +55,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
   });
 
   const [previewImage, setPreviewImage] = useState<string | null>(null);
+  
+  // State for Reset Process
+  const [isResetting, setIsResetting] = useState(false);
   
   const [stats, setStats] = useState({
     totalAudited: 0,
@@ -234,6 +238,22 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
       }
   };
 
+  const handleResetAllData = async () => {
+      if (window.confirm("PERINGATAN: Tindakan ini akan MENGHAPUS SEMUA DATA SCAN hasil audit (Logs & Status Lokasi).\n\nDatabase Barang (Master Data) TIDAK akan terhapus.\n\nApakah Anda yakin ingin melanjutkan?")) {
+          if (window.confirm("KONFIRMASI TERAKHIR: Data yang dihapus TIDAK BISA dikembalikan.\n\nLanjutkan reset?")) {
+              setIsResetting(true);
+              try {
+                  await resetAllAuditData();
+                  alert("Data berhasil di-reset. Siap untuk sesi audit baru.");
+              } catch (e: any) {
+                  alert(e.message || "Gagal melakukan reset.");
+              } finally {
+                  setIsResetting(false);
+              }
+          }
+      }
+  };
+
   const handleExportReport = () => {
     const exportRows = groupedData.flatMap(group => 
         group.logs.map(log => ({
@@ -325,6 +345,14 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
             </div>
         </div>
         <div className="flex items-center gap-2">
+            <button 
+                onClick={handleResetAllData}
+                disabled={isResetting}
+                title="Reset Semua Data Scan"
+                className="w-11 h-11 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-red-500 rounded-2xl flex items-center justify-center hover:bg-red-50 hover:border-red-200 active:scale-90 transition-all shadow-sm disabled:opacity-50"
+            >
+                {isResetting ? <RefreshCw className="animate-spin" size={20} /> : <Trash2 size={20} />}
+            </button>
             <button onClick={handleExportReport} className="w-11 h-11 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-emerald-600 rounded-2xl flex items-center justify-center hover:shadow-lg active:scale-90 transition-all shadow-sm">
                 <span className="material-symbols-outlined text-[24px]">sim_card_download</span>
             </button>

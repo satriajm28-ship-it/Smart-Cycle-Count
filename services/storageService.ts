@@ -179,6 +179,50 @@ export const deleteAuditLog = async (id: string) => {
     }
 };
 
+// --- NEW: Reset All Data Feature ---
+export const resetAllAuditData = async (onStatus?: (msg: string) => void) => {
+    try {
+        if (onStatus) onStatus("Menghapus data hasil scan...");
+        
+        // 1. Delete all Audit Logs
+        const logsSnapshot = await getDocs(collection(db, COLLECTIONS.AUDIT_LOGS));
+        const logsBatchSize = 400; // Safe limit under 500
+        const logsTotal = logsSnapshot.docs.length;
+        
+        for (let i = 0; i < logsTotal; i += logsBatchSize) {
+            const batch = writeBatch(db);
+            logsSnapshot.docs.slice(i, i + logsBatchSize).forEach(d => batch.delete(d.ref));
+            await batch.commit();
+        }
+
+        if (onStatus) onStatus("Mereset status lokasi...");
+
+        // 2. Delete all Location States
+        const statesSnapshot = await getDocs(collection(db, COLLECTIONS.LOCATION_STATES));
+        const statesBatchSize = 400;
+        const statesTotal = statesSnapshot.docs.length;
+
+        for (let i = 0; i < statesTotal; i += statesBatchSize) {
+            const batch = writeBatch(db);
+            statesSnapshot.docs.slice(i, i + statesBatchSize).forEach(d => batch.delete(d.ref));
+            await batch.commit();
+        }
+
+        // 3. Clear Local Storage for Transaction Data only
+        localStorage.removeItem(LOCAL_KEYS.AUDIT_LOGS);
+        localStorage.removeItem(LOCAL_KEYS.STATES);
+
+        // Notify UI
+        window.dispatchEvent(new Event('auditDataChanged'));
+        
+        if (onStatus) onStatus("Selesai!");
+        
+    } catch (e) {
+        console.error("Reset failed:", e);
+        throw new Error("Gagal mereset data. Periksa koneksi internet.");
+    }
+};
+
 export const updateLocationStatus = async (
     locationName: string, 
     status: LocationStatusType,
