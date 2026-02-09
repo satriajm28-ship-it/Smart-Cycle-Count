@@ -395,20 +395,20 @@ export const AuditForm: React.FC<AuditFormProps> = ({ onSuccess, initialLocation
                 </div>
             </section>
 
-            {/* PHYSICAL COUNT SECTION - IMPROVED UI SIZE */}
+            {/* PHYSICAL COUNT SECTION - OPTIMIZED SIZE */}
             <section className="mb-6">
                 <h3 className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-2 px-1">Hitung Fisik (Quantity)</h3>
                 <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
-                    <div className="p-3 flex gap-2 items-center">
+                    <div className="p-2 flex gap-2 items-center">
                         <button 
                             onClick={() => setPhysicalQty(prev => Math.max(0, prev - 1))} 
-                            className="w-14 h-14 rounded-xl border-2 border-slate-100 dark:border-slate-700 flex items-center justify-center text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 hover:border-slate-300 transition-all active:scale-95"
+                            className="w-12 h-12 rounded-xl border-2 border-slate-100 dark:border-slate-700 flex items-center justify-center text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 hover:border-slate-300 transition-all active:scale-95"
                         >
-                            <span className="material-symbols-outlined text-2xl font-bold">remove</span>
+                            <span className="material-symbols-outlined text-xl font-bold">remove</span>
                         </button>
                         
                         <input 
-                          className="flex-1 h-14 text-center text-3xl font-black font-mono text-primary bg-slate-50 dark:bg-slate-900 border-none rounded-xl focus:ring-2 focus:ring-primary/20 outline-none" 
+                          className="flex-1 h-12 text-center text-2xl font-black font-mono text-primary bg-slate-50 dark:bg-slate-900 border-none rounded-xl focus:ring-2 focus:ring-primary/20 outline-none" 
                           type="number" 
                           inputMode="numeric"
                           value={physicalQty} 
@@ -418,23 +418,25 @@ export const AuditForm: React.FC<AuditFormProps> = ({ onSuccess, initialLocation
                         
                         <button 
                             onClick={() => setPhysicalQty(prev => prev + 1)} 
-                            className="w-14 h-14 rounded-xl bg-primary text-white flex items-center justify-center shadow-lg shadow-primary/30 active:scale-95 transition-all hover:bg-blue-500"
+                            className="w-12 h-12 rounded-xl bg-primary text-white flex items-center justify-center shadow-lg shadow-primary/30 active:scale-95 transition-all hover:bg-blue-500"
                         >
-                            <span className="material-symbols-outlined text-2xl font-bold">add</span>
+                            <span className="material-symbols-outlined text-xl font-bold">add</span>
                         </button>
                     </div>
                     
-                    <div className={`px-5 py-4 border-t border-slate-100 dark:border-slate-700 ${isSignificant ? 'bg-red-50 dark:bg-red-900/10' : 'bg-slate-50 dark:bg-slate-900/50'}`}>
+                    <div className={`px-4 py-2 border-t border-slate-100 dark:border-slate-700 ${isSignificant ? 'bg-red-50 dark:bg-red-900/10' : 'bg-slate-50 dark:bg-slate-900/50'}`}>
                         <div className="flex items-center justify-between">
                             <div className="flex flex-col">
-                                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Analisis Selisih</span>
-                                <span className="text-[9px] text-slate-400">Dibandingkan {systemStock} stok sistem</span>
+                                <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Analisis Selisih</span>
+                                <span className="text-[8px] text-slate-400">vs {systemStock} sistem</span>
                             </div>
-                            <div className="text-right">
-                                <span className={`text-xl font-black ${variance < 0 ? 'text-red-600' : variance > 0 ? 'text-primary' : 'text-emerald-500'}`}>
+                            <div className="text-right flex items-center gap-2">
+                                <span className={`text-lg font-black leading-none ${variance < 0 ? 'text-red-600' : variance > 0 ? 'text-primary' : 'text-emerald-500'}`}>
                                     {variance > 0 ? '+' : ''}{variance}
                                 </span>
-                                <p className="text-[8px] font-bold uppercase tracking-tighter text-slate-400">{variance === 0 ? 'Sesuai' : (variance > 0 ? 'Surplus' : 'Kurang')}</p>
+                                <span className="text-[8px] font-bold uppercase tracking-tighter text-slate-400 bg-white dark:bg-slate-800 px-1.5 py-0.5 rounded border border-slate-100 dark:border-slate-700">
+                                    {variance === 0 ? 'Sesuai' : (variance > 0 ? 'Surplus' : 'Kurang')}
+                                </span>
                             </div>
                         </div>
                     </div>
