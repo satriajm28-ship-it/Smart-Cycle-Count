@@ -197,6 +197,11 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, currentUser, o
       e.preventDefault(); 
       e.stopPropagation(); 
       
+      if (currentUser.role !== 'admin') {
+          alert("Akses Ditolak: Hanya ADMIN yang dapat menghapus data scan.");
+          return;
+      }
+
       if (window.confirm("Hapus data scan ini?")) {
           try {
               // Delete from firestore/local
@@ -626,7 +631,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, currentUser, o
                                                 </div>
                                                 <div className="flex gap-2">
                                                     <button onClick={(e) => handleEditClick(log, e)} className="p-2.5 bg-slate-50 dark:bg-slate-800 text-slate-400 rounded-xl hover:text-primary hover:bg-primary/5 transition-all"><Pencil size={14} /></button>
-                                                    <button onClick={(e) => handleDelete(log.id, e)} className="p-2.5 bg-slate-50 dark:bg-slate-800 text-slate-400 rounded-xl hover:text-red-500 hover:bg-red-500/5 transition-all"><Trash2 size={14} /></button>
+                                                    
+                                                    {currentUser.role === 'admin' && (
+                                                        <button onClick={(e) => handleDelete(log.id, e)} className="p-2.5 bg-slate-50 dark:bg-slate-800 text-slate-400 rounded-xl hover:text-red-500 hover:bg-red-500/5 transition-all"><Trash2 size={14} /></button>
+                                                    )}
                                                 </div>
                                             </div>
                                         </div>
