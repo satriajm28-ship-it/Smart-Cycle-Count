@@ -1,3 +1,4 @@
+
 import { Firestore } from "firebase/firestore";
 
 // Workaround for potential type definition mismatches where named exports are not recognized
@@ -7,8 +8,10 @@ import * as firebaseFirestore from "firebase/firestore";
 import * as firebaseAuth from "firebase/auth";
 
 const initializeApp = (firebaseApp as any).initializeApp;
-const getFirestore = (firebaseFirestore as any).getFirestore;
+const initializeFirestore = (firebaseFirestore as any).initializeFirestore;
 const getAuth = (firebaseAuth as any).getAuth;
+const persistentLocalCache = (firebaseFirestore as any).persistentLocalCache;
+const persistentMultipleTabManager = (firebaseFirestore as any).persistentMultipleTabManager;
 
 /**
  * FIREBASE SECURITY RULES (Copy & Paste to Firebase Console -> Firestore -> Rules):
@@ -36,5 +39,14 @@ const firebaseConfig = {
 };
 
 const app = initializeApp(firebaseConfig);
-export const db = getFirestore(app) as Firestore;
+
+// Initialize Firestore with settings to handle connection issues better
+// experimentalAutoDetectLongPolling helps when WebSockets are blocked or unstable (fixing the 10s timeout error)
+export const db = initializeFirestore(app, {
+  localCache: persistentLocalCache ? persistentLocalCache({
+    tabManager: persistentMultipleTabManager ? persistentMultipleTabManager() : undefined
+  }) : undefined,
+  experimentalAutoDetectLongPolling: true
+}) as Firestore;
+
 export const auth = getAuth(app);
