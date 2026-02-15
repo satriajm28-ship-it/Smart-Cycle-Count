@@ -10,7 +10,7 @@ import {
   resetAllAuditData,
   restoreAuditData
 } from '../services/storageService';
-import { AuditRecord, AppView, MasterItem, LocationState, MasterLocation } from '../types';
+import { AuditRecord, AppView, MasterItem, LocationState, MasterLocation, AppUser } from '../types';
 import { Logo } from './Logo';
 import * as XLSX from 'xlsx';
 import { 
@@ -19,11 +19,13 @@ import {
   CheckCircle2, Package, MapPin, Clock, 
   BarChart3, Info, ChevronRight, LayoutDashboard,
   ArrowUpRight, ArrowDownRight, Minus, RefreshCw,
-  RotateCcw
+  RotateCcw, LogOut
 } from 'lucide-react';
 
 interface DashboardProps {
   onNavigate: (view: AppView) => void;
+  currentUser: AppUser;
+  onLogout: () => void;
 }
 
 interface GroupedItem {
@@ -40,13 +42,11 @@ interface GroupedItem {
   master?: MasterItem;
 }
 
-export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
+export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, currentUser, onLogout }) => {
   const [groupedData, setGroupedData] = useState<GroupedItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [errorStatus, setErrorStatus] = useState<string | null>(null);
   
-  const [teamName, setTeamName] = useState(() => localStorage.getItem('team_member_name') || '');
-
   const [editingLog, setEditingLog] = useState<AuditRecord | null>(null);
   const [editForm, setEditForm] = useState({
       physicalQty: 0,
@@ -242,6 +242,11 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
   };
 
   const handleResetAllData = async () => {
+      if (currentUser.role !== 'admin') {
+          alert("Akses Ditolak: Hanya ADMIN yang dapat menghapus semua data.");
+          return;
+      }
+      
       if (window.confirm("PERINGATAN: Tindakan ini akan MEMINDAHKAN SEMUA DATA SCAN saat ini ke Backup dan mengosongkan Dashboard.\n\nDatabase Barang (Master Data) AMAN.\n\nLanjutkan reset?")) {
           setIsResetting(true);
           try {
@@ -256,6 +261,11 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
   };
 
   const handleRestoreData = async () => {
+      if (currentUser.role !== 'admin') {
+          alert("Akses Ditolak: Hanya ADMIN yang dapat mengembalikan data.");
+          return;
+      }
+
       if (window.confirm("KEMBALIKAN DATA?\n\nTindakan ini akan mengambil data dari BACKUP TERAKHIR dan menggabungkannya kembali ke Dashboard.\n\nApakah Anda yakin?")) {
           setIsRestoring(true);
           try {
@@ -356,28 +366,41 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
             </div>
             <div>
                 <h1 className="text-base font-black uppercase tracking-tight text-slate-900 dark:text-white leading-none">Smart Dashboard</h1>
-                <p className="text-[9px] font-bold text-primary uppercase tracking-[0.2em] mt-1.5">MEDIKA BINA INVESTAMA</p>
+                <div className="flex items-center gap-2 mt-1.5">
+                    <span className="text-[9px] font-bold text-primary uppercase tracking-[0.2em]">MEDIKA BINA INVESTAMA</span>
+                    <span className="text-[9px] text-slate-400 px-1 border-l border-slate-300 dark:border-slate-700">{currentUser.username}</span>
+                </div>
             </div>
         </div>
         <div className="flex items-center gap-2">
-            <button 
-                onClick={handleRestoreData}
-                disabled={isRestoring || isResetting}
-                title="Kembalikan Data (Undo Reset)"
-                className="w-11 h-11 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-500 rounded-2xl flex items-center justify-center hover:bg-slate-50 hover:border-slate-300 active:scale-90 transition-all shadow-sm disabled:opacity-50"
-            >
-                {isRestoring ? <RefreshCw className="animate-spin" size={20} /> : <RotateCcw size={20} />}
-            </button>
-            <button 
-                onClick={handleResetAllData}
-                disabled={isResetting || isRestoring}
-                title="Reset & Backup Data"
-                className="w-11 h-11 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-red-500 rounded-2xl flex items-center justify-center hover:bg-red-50 hover:border-red-200 active:scale-90 transition-all shadow-sm disabled:opacity-50"
-            >
-                {isResetting ? <RefreshCw className="animate-spin" size={20} /> : <Trash2 size={20} />}
-            </button>
+            {/* Admin-only Controls */}
+            {currentUser.role === 'admin' && (
+                <>
+                    <button 
+                        onClick={handleRestoreData}
+                        disabled={isRestoring || isResetting}
+                        title="Kembalikan Data (Undo Reset)"
+                        className="w-11 h-11 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-500 rounded-2xl flex items-center justify-center hover:bg-slate-50 hover:border-slate-300 active:scale-90 transition-all shadow-sm disabled:opacity-50"
+                    >
+                        {isRestoring ? <RefreshCw className="animate-spin" size={20} /> : <RotateCcw size={20} />}
+                    </button>
+                    <button 
+                        onClick={handleResetAllData}
+                        disabled={isResetting || isRestoring}
+                        title="Reset & Backup Data"
+                        className="w-11 h-11 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-red-500 rounded-2xl flex items-center justify-center hover:bg-red-50 hover:border-red-200 active:scale-90 transition-all shadow-sm disabled:opacity-50"
+                    >
+                        {isResetting ? <RefreshCw className="animate-spin" size={20} /> : <Trash2 size={20} />}
+                    </button>
+                </>
+            )}
+            
             <button onClick={handleExportReport} className="w-11 h-11 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-emerald-600 rounded-2xl flex items-center justify-center hover:shadow-lg active:scale-90 transition-all shadow-sm">
                 <span className="material-symbols-outlined text-[24px]">sim_card_download</span>
+            </button>
+            
+            <button onClick={onLogout} title="Logout" className="w-11 h-11 bg-slate-100 dark:bg-slate-800 border border-transparent text-slate-500 rounded-2xl flex items-center justify-center hover:bg-slate-200 active:scale-90 transition-all ml-2">
+                <LogOut size={20} />
             </button>
         </div>
       </header>

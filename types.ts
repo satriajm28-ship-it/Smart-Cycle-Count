@@ -55,3 +55,12 @@ export interface InventoryStats {
   accuracyRate: number;
   flaggedItems: number;
 }
+
+// --- AUTH TYPES ---
+export type UserRole = 'admin' | 'user';
+
+export interface AppUser {
+  username: string;
+  role: UserRole;
+  name: string;
+}

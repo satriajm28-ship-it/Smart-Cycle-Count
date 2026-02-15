@@ -1,21 +1,27 @@
 
 import React, { useState, useEffect } from 'react';
-import { AppView } from './types';
+import { AppView, AppUser } from './types';
 import { AuditForm } from './components/AuditForm';
 import { Dashboard } from './components/Dashboard';
 import { MasterData } from './components/MasterData';
 import { DamagedReport } from './components/DamagedReport';
 import { Logo } from './components/Logo';
+import { Login } from './components/Login'; // Import Login
 import { auth } from './services/firebaseConfig';
 import * as firebaseAuth from 'firebase/auth';
 import { setPermissionErrorHandler } from './services/storageService';
+import { getSessionUser, clearSessionUser } from './services/authService';
 
 const { onAuthStateChanged, signInAnonymously } = firebaseAuth as any;
 
 const App: React.FC = () => {
   const [view, setView] = useState<AppView>(AppView.DASHBOARD);
   const [navParams, setNavParams] = useState<any>(null);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  
+  // Authentication State
+  const [isFirebaseConnected, setIsFirebaseConnected] = useState(false);
+  const [currentUser, setCurrentUser] = useState<AppUser | null>(null);
+  
   const [hasPermissionError, setHasPermissionError] = useState(false);
   const [showSetupHelper, setShowSetupHelper] = useState(false);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
@@ -23,26 +29,35 @@ const App: React.FC = () => {
   useEffect(() => {
     let mounted = true;
 
+    // 1. Check for existing session on load
+    const savedUser = getSessionUser();
+    if (savedUser) {
+        setCurrentUser(savedUser);
+    }
+
+    // 2. Network Listeners
     const handleOnline = () => setIsOnline(true);
     const handleOffline = () => setIsOnline(false);
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
 
+    // 3. Permission Handler
     setPermissionErrorHandler((err) => {
         if (mounted && err.code === 'permission-denied') {
             setHasPermissionError(true);
         }
     });
 
+    // 4. Firebase Anonymous Auth (Background)
     const unsubscribe = onAuthStateChanged(auth, (user: any) => {
       if (user) {
-        if (mounted) setIsAuthenticated(true);
+        if (mounted) setIsFirebaseConnected(true);
       } else {
         signInAnonymously(auth)
             .catch((error: any) => {
                 console.warn("Auth check failed:", error.message);
                 if (mounted) {
-                    setIsAuthenticated(true); 
+                    setIsFirebaseConnected(true); 
                     if (error.code === 'auth/configuration-not-found' || error.code === 'auth/operation-not-allowed') {
                         setHasPermissionError(true);
                     }
@@ -64,7 +79,20 @@ const App: React.FC = () => {
     setView(newView);
   };
 
-  if (!isAuthenticated) {
+  const handleLoginSuccess = (user: AppUser) => {
+      setCurrentUser(user);
+      setView(AppView.DASHBOARD);
+  };
+
+  const handleLogout = () => {
+      clearSessionUser();
+      setCurrentUser(null);
+      // Optional: also sign out of Firebase if strict rule enforcement needed, 
+      // but usually keeping anon auth active for next login is faster.
+  };
+
+  // 1. Show Splash/Loading if Firebase connecting
+  if (!isFirebaseConnected) {
     return (
         <div className="flex flex-col items-center justify-center min-h-screen bg-[#050A18] text-white gap-8">
             <div className="relative animate-pulse">
@@ -82,6 +110,12 @@ const App: React.FC = () => {
     );
   }
 
+  // 2. Show Login Screen if not logged in locally
+  if (!currentUser) {
+      return <Login onLoginSuccess={handleLoginSuccess} />;
+  }
+
+  // 3. Main App
   return (
     <div className="min-h-screen bg-[#f6f6f8] relative">
         {hasPermissionError && (
@@ -189,7 +223,13 @@ service cloud.firestore {
         )}
 
         <div className="relative z-10">
-            {view === AppView.DASHBOARD && <Dashboard onNavigate={navigate} />}
+            {view === AppView.DASHBOARD && (
+                <Dashboard 
+                    onNavigate={navigate} 
+                    currentUser={currentUser}
+                    onLogout={handleLogout}
+                />
+            )}
             
             {view === AppView.DAMAGED_REPORT && (
                 <div className="animate-fade-in">
