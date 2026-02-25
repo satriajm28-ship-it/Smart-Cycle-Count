@@ -119,27 +119,53 @@ export const MasterData: React.FC<MasterDataProps> = ({ currentUser }) => {
   // --- GOOGLE SHEETS URL HANDLER ---
   const fetchGoogleSheet = async () => {
       if (!sheetUrl) return;
-      const matches = sheetUrl.match(/\/d\/([a-zA-Z0-9-_]+)/);
-      if (!matches || !matches[1]) {
-          alert("Invalid Google Sheets URL.");
+      
+      // Extract Spreadsheet ID
+      const idMatches = sheetUrl.match(/\/d\/([a-zA-Z0-9-_]+)/);
+      if (!idMatches || !idMatches[1]) {
+          alert("URL Google Sheets tidak valid. Pastikan link mengandung ID spreadsheet.");
           return;
       }
-      
-      const sheetId = matches[1];
-      const csvUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv`;
+      const sheetId = idMatches[1];
+
+      // Extract GID (Sheet ID) if present
+      const gidMatches = sheetUrl.match(/[#&]gid=([0-9]+)/);
+      const gid = gidMatches ? gidMatches[1] : '0'; // Default to first sheet (gid=0) if not found
+
+      // Construct CSV Export URL (Using /export endpoint is often more reliable for public sheets than /gviz)
+      const csvUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv&gid=${gid}`;
 
       setIsFetchingSheet(true);
       try {
+          console.log("Fetching CSV from:", csvUrl);
           const response = await fetch(csvUrl);
-          if (!response.ok) throw new Error("Failed to fetch");
+          
+          if (!response.ok) {
+              if (response.status === 404) throw new Error("Spreadsheet tidak ditemukan.");
+              if (response.status === 401 || response.status === 403) throw new Error("Izin ditolak. Pastikan akses 'Anyone with the link' sudah aktif.");
+              throw new Error(`Gagal mengambil data (Status: ${response.status})`);
+          }
+
           const csvText = await response.text();
+          
+          // Basic validation to check if we got HTML instead of CSV (common login page redirect issue)
+          if (csvText.trim().toLowerCase().startsWith("<!doctype html") || csvText.includes("<html")) {
+              throw new Error("Link mengarah ke halaman login. Pastikan file bersifat PUBLIK (Anyone with the link).");
+          }
+
           const workbook = XLSX.read(csvText, { type: 'string' });
           const sheetName = workbook.SheetNames[0];
           const sheet = workbook.Sheets[sheetName];
           const jsonData = XLSX.utils.sheet_to_json<any>(sheet);
+          
+          if (jsonData.length === 0) {
+              throw new Error("Sheet kosong atau format tidak terbaca.");
+          }
+
           processToPreview(jsonData);
-      } catch (error) {
-          alert("Gagal mengambil data. Pastikan link Google Sheet benar dan akses 'Anyone with link' aktif.");
+      } catch (error: any) {
+          console.error("Sheet Fetch Error:", error);
+          alert(`ERROR: ${error.message}\n\nTips:\n1. Klik tombol 'Share' di pojok kanan atas Google Sheet.\n2. Ubah akses menjadi 'Anyone with the link'.\n3. Copy link tersebut.`);
       } finally {
           setIsFetchingSheet(false);
       }
@@ -147,14 +173,28 @@ export const MasterData: React.FC<MasterDataProps> = ({ currentUser }) => {
 
   // --- COMMON IMPORT LOGIC ---
   const processToPreview = (jsonData: any[]) => {
-    if (jsonData.length === 0) return;
+    if (!jsonData || jsonData.length === 0) {
+        alert("Data kosong atau tidak terbaca.");
+        return;
+    }
 
+    // Debug: Log raw headers to help troubleshoot
     const rawHeaders = Object.keys(jsonData[0]);
+    console.log("Raw Headers found:", rawHeaders);
+
     const headerMap: Record<string, string | null> = {};
+    let skuFound = false;
     
     rawHeaders.forEach(h => {
-        headerMap[h] = normalizeHeader(h);
+        const normalized = normalizeHeader(h);
+        headerMap[h] = normalized;
+        if (normalized === 'sku') skuFound = true;
     });
+
+    if (!skuFound) {
+        alert("Gagal menemukan kolom 'Kode Barang' atau 'SKU'.\n\nHeader yang terbaca: " + rawHeaders.join(", ") + "\n\nPastikan baris pertama adalah header tabel.");
+        return;
+    }
 
     const parsedItems: MasterItem[] = jsonData.map((row) => {
         const item: any = {
