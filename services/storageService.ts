@@ -110,7 +110,24 @@ export const subscribeToLocationStates = (onUpdate: (data: Record<string, Locati
   );
 };
 
-export const getMasterData = async (): Promise<MasterItem[]> => getLocal<MasterItem[]>(LOCAL_KEYS.MASTER_DATA, []);
+export const getMasterData = async (): Promise<MasterItem[]> => {
+    const local = getLocal<MasterItem[]>(LOCAL_KEYS.MASTER_DATA, []);
+    if (local.length > 0) return local;
+    return fetchMasterData();
+};
+
+export const fetchMasterData = async (): Promise<MasterItem[]> => {
+    try {
+        const snapshot = await getDocs(collection(db, COLLECTIONS.MASTER_DATA));
+        const data = snapshot.docs.map(doc => doc.data() as MasterItem);
+        setLocal(LOCAL_KEYS.MASTER_DATA, data);
+        return data;
+    } catch (e) {
+        console.error("Fetch master data failed:", e);
+        return getLocal<MasterItem[]>(LOCAL_KEYS.MASTER_DATA, []);
+    }
+};
+
 export const getMasterLocations = async (): Promise<MasterLocation[]> => getLocal<MasterLocation[]>(LOCAL_KEYS.LOCATIONS, []);
 
 export const saveMasterData = async (items: MasterItem[], onProgress?: (progress: number) => void) => {
@@ -120,18 +137,23 @@ export const saveMasterData = async (items: MasterItem[], onProgress?: (progress
         const batch = writeBatch(db);
         const chunk = items.slice(i, i + batchSize);
         chunk.forEach(item => {
+            // Use set with merge: true to update existing or create new
             batch.set(doc(db, COLLECTIONS.MASTER_DATA, item.sku), item, { merge: true });
         });
         await batch.commit();
         if (onProgress) onProgress(Math.round(((i + chunk.length) / total) * 100));
     }
-    setLocal(LOCAL_KEYS.MASTER_DATA, items);
+    // Refresh local storage after all batches are committed
+    await fetchMasterData();
 };
 
 export const deleteAllMasterData = async (onStatus?: (msg: string) => void) => {
     const snapshot = await getDocs(collection(db, COLLECTIONS.MASTER_DATA));
     const total = snapshot.docs.length;
-    if (total === 0) return;
+    if (total === 0) {
+        setLocal(LOCAL_KEYS.MASTER_DATA, []);
+        return;
+    }
     const batchSize = 100;
     for (let i = 0; i < total; i += batchSize) {
         const batch = writeBatch(db);

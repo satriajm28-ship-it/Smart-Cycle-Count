@@ -255,7 +255,7 @@ service cloud.firestore {
                         <span className="material-symbols-outlined">arrow_back</span>
                         Back to Dashboard
                     </button>
-                    <MasterData />
+                    <MasterData currentUser={currentUser} />
                 </div>
             )}
         </div>

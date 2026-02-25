@@ -1,11 +1,15 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { MasterItem } from '../types';
-import { getMasterData, saveMasterData, deleteAllMasterData } from '../services/storageService';
-import { Download, Upload, FileSpreadsheet, Link as LinkIcon, Check, Sheet, ArrowRight, RefreshCw, ChevronLeft, ChevronRight, AlertTriangle, Database } from 'lucide-react';
+import { MasterItem, AppUser } from '../types';
+import { getMasterData, saveMasterData, deleteAllMasterData, fetchMasterData } from '../services/storageService';
+import { Download, Upload, FileSpreadsheet, Link as LinkIcon, Check, Sheet, ArrowRight, RefreshCw, ChevronLeft, ChevronRight, AlertTriangle, Database, Trash2 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
-export const MasterData: React.FC = () => {
+interface MasterDataProps {
+  currentUser?: AppUser | null;
+}
+
+export const MasterData: React.FC<MasterDataProps> = ({ currentUser }) => {
   const [items, setItems] = useState<MasterItem[]>([]);
   const [activeTab, setActiveTab] = useState<'excel' | 'sheets'>('sheets');
   
@@ -188,7 +192,9 @@ export const MasterData: React.FC = () => {
 
   const confirmImport = async () => {
       if (previewItems.length === 0) return;
-      if (replaceMode && !window.confirm("PERINGATAN: Mode 'Ganti Semua Data' akan menghapus seluruh data master lama. Lanjutkan?")) {
+      
+      const isReplace = replaceMode;
+      if (isReplace && !window.confirm("PERINGATAN: Mode 'Ganti Semua Data' akan menghapus seluruh data master lama. Lanjutkan?")) {
           return;
       }
 
@@ -197,22 +203,23 @@ export const MasterData: React.FC = () => {
       setImportStatusText("Initializing connection...");
       
       try {
-          if (replaceMode) {
+          if (isReplace) {
               setImportStatusText("Clearing old database...");
               await deleteAllMasterData((msg) => setImportStatusText(msg));
           }
 
-          setImportStatusText("Uploading to Cloud Database...");
-          // Pass progress callback to service
+          setImportStatusText("Syncing Data to Cloud...");
+          // saveMasterData now handles both new and existing items (upsert)
           await saveMasterData(previewItems, (progress) => {
               setImportProgress(progress);
               setImportStatusText(`Syncing ${progress}%...`);
           });
           
-          const refreshedData = await getMasterData();
+          // Fetch fresh data from Firestore to ensure UI is in sync
+          const refreshedData = await fetchMasterData();
           setItems(refreshedData);
           setPreviewItems([]);
-          alert(`Berhasil sinkronisasi ${previewItems.length} barang ke semua user!`);
+          alert(`Berhasil sinkronisasi ${previewItems.length} barang! Data yang sudah ada telah diperbarui otomatis.`);
       } catch (e) {
           console.error(e);
           alert("Terjadi kesalahan saat menyimpan data. Pastikan koneksi internet stabil.");
@@ -220,6 +227,24 @@ export const MasterData: React.FC = () => {
           setIsImporting(false);
           setImportProgress(0);
           setSheetUrl('');
+      }
+  };
+
+  const handleManualDeleteAll = async () => {
+      if (!window.confirm("APAKAH ANDA YAKIN? Tindakan ini akan menghapus SELURUH data master dari database cloud. Data tidak dapat dikembalikan!")) {
+          return;
+      }
+      
+      setIsImporting(true);
+      setImportStatusText("Deleting all records...");
+      try {
+          await deleteAllMasterData((msg) => setImportStatusText(msg));
+          setItems([]);
+          alert("Seluruh data master berhasil dihapus.");
+      } catch (e) {
+          alert("Gagal menghapus data.");
+      } finally {
+          setIsImporting(false);
       }
   };
 
@@ -256,7 +281,7 @@ export const MasterData: React.FC = () => {
           </div>
       )}
 
-      <div className="p-6 bg-slate-900 text-white flex justify-between items-center">
+      <div className="p-6 bg-slate-900 text-white flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h2 className="text-2xl font-bold flex items-center gap-2">
             <FileSpreadsheet className="text-green-400" />
@@ -266,6 +291,16 @@ export const MasterData: React.FC = () => {
             Format: Kode barang | Nama Barang | Nama Satuan | Nama Gudang | No Seri/Produksi | Tgl Kadaluarsa | Kuantitas
           </p>
         </div>
+
+        {currentUser?.role === 'admin' && items.length > 0 && (
+            <button 
+                onClick={handleManualDeleteAll}
+                className="bg-red-500/10 hover:bg-red-500 text-red-500 hover:text-white px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 transition-all border border-red-500/20"
+            >
+                <Trash2 size={14} />
+                Hapus Semua Data
+            </button>
+        )}
       </div>
 
       <div className="flex border-b border-gray-200">
