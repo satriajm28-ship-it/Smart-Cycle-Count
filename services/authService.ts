@@ -7,7 +7,7 @@ const STORAGE_KEY = 'app_session_user';
 export const authenticateUser = (username: string, password: string): AppUser | null => {
     
     // 1. Check Admin
-    if (username === 'admin' && password === 'Admin 123') {
+    if (username === 'admin' && password === 'admin123') {
         return {
             username: 'admin',
             role: 'admin',

@@ -678,29 +678,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, currentUser, o
         })}
       </main>
 
-      {/* BOTTOM NAV - FLOATING DOCK STYLE */}
-      <nav className="fixed bottom-6 left-6 right-6 z-40 bg-white/80 dark:bg-slate-900/80 backdrop-blur-2xl border border-white/20 dark:border-white/5 rounded-[2.5rem] p-3 shadow-2xl shadow-black/20 ring-1 ring-black/5">
-        <div className="flex justify-around items-center h-14 max-w-md mx-auto relative">
-            <button className="flex flex-col items-center gap-1 group">
-                <div className="w-10 h-10 rounded-2xl bg-primary/10 text-primary flex items-center justify-center transition-all group-active:scale-90">
-                    <LayoutDashboard size={20} className="fill-current" />
-                </div>
-                <span className="text-[9px] font-black uppercase tracking-widest text-primary">Beranda</span>
-            </button>
-            
-            <button onClick={() => onNavigate(AppView.FORM)} className="w-16 h-16 bg-primary text-white rounded-3xl flex items-center justify-center shadow-xl shadow-primary/40 -mt-16 border-[6px] border-slate-50 dark:border-[#050A18] active:scale-90 active:rotate-12 transition-all">
-                <span className="material-symbols-outlined text-[32px]">add_a_photo</span>
-            </button>
-            
-            <button onClick={() => onNavigate(AppView.MASTER_DATA)} className="flex flex-col items-center gap-1 group">
-                <div className="w-10 h-10 rounded-2xl bg-slate-100 dark:bg-slate-800 text-slate-400 flex items-center justify-center transition-all group-hover:text-slate-600 dark:group-hover:text-slate-200 group-active:scale-90">
-                    <span className="material-symbols-outlined text-[20px]">database</span>
-                </div>
-                <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">Database</span>
-            </button>
-        </div>
-      </nav>
-      
       {/* Footer Branding Overlay */}
       <div className="fixed bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-slate-200/50 dark:from-black/50 to-transparent pointer-events-none z-30"></div>
     </div>

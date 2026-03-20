@@ -5,11 +5,13 @@ import { AuditForm } from './components/AuditForm';
 import { Dashboard } from './components/Dashboard';
 import { MasterData } from './components/MasterData';
 import { DamagedReport } from './components/DamagedReport';
+import { WMSIntegration } from './components/WMSIntegration';
 import { Logo } from './components/Logo';
 import { Login } from './components/Login'; // Import Login
 import { auth } from './services/firebaseConfig';
 import * as firebaseAuth from 'firebase/auth';
 import { setPermissionErrorHandler } from './services/storageService';
+import { Home, ClipboardList, Database } from 'lucide-react';
 import { getSessionUser, clearSessionUser } from './services/authService';
 
 const { onAuthStateChanged, signInAnonymously } = firebaseAuth as any;
@@ -131,7 +133,7 @@ const App: React.FC = () => {
             </div>
         )}
 
-        <div className="fixed bottom-1 left-0 right-0 z-[120] pointer-events-none flex flex-col items-center justify-center opacity-80 select-none pb-[env(safe-area-inset-bottom)] transition-all">
+        <div className="fixed bottom-[calc(4.5rem+env(safe-area-inset-bottom))] left-0 right-0 z-[120] pointer-events-none flex flex-col items-center justify-center opacity-80 select-none transition-all">
              {/* Network Status Indicator */}
              <div className={`flex items-center gap-1.5 mb-1 px-2 py-0.5 rounded-full backdrop-blur-sm ${isOnline ? 'bg-emerald-500/10' : 'bg-red-500/10'}`}>
                 <div className={`w-1.5 h-1.5 rounded-full ${isOnline ? 'bg-emerald-500 shadow-[0_0_5px_rgba(16,185,129,0.5)]' : 'bg-red-500 shadow-[0_0_5px_rgba(239,68,68,0.5)]'}`}></div>
@@ -222,7 +224,7 @@ service cloud.firestore {
             </div>
         )}
 
-        <div className="relative z-10">
+        <div className="relative z-10 pb-20">
             {view === AppView.DASHBOARD && (
                 <Dashboard 
                     onNavigate={navigate} 
@@ -248,16 +250,40 @@ service cloud.firestore {
 
             {view === AppView.MASTER_DATA && (
                 <div className="p-4 md:p-8 animate-fade-in relative">
-                    <button 
-                        onClick={() => navigate(AppView.DASHBOARD)}
-                        className="mb-4 flex items-center gap-2 text-slate-600 hover:text-slate-900 font-bold text-sm"
-                    >
-                        <span className="material-symbols-outlined">arrow_back</span>
-                        Back to Dashboard
-                    </button>
                     <MasterData currentUser={currentUser} />
                 </div>
             )}
+
+            {view === AppView.WMS_INTEGRATION && (
+                <div className="p-4 md:p-8 animate-fade-in relative">
+                    <WMSIntegration />
+                </div>
+            )}
+        </div>
+
+        {/* Bottom Navigation Bar */}
+        <div className="fixed bottom-0 left-0 right-0 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 shadow-[0_-4px_20px_rgba(0,0,0,0.05)] dark:shadow-[0_-4px_20px_rgba(0,0,0,0.2)] z-[130] px-6 py-3 flex justify-around items-center pb-[calc(0.75rem+env(safe-area-inset-bottom))]">
+            <button 
+                onClick={() => navigate(AppView.DASHBOARD)}
+                className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all ${view === AppView.DASHBOARD ? 'text-primary scale-110' : 'text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'}`}
+            >
+                <Home size={24} strokeWidth={view === AppView.DASHBOARD ? 2.5 : 2} />
+                <span className="text-[10px] font-bold">Beranda</span>
+            </button>
+            <button 
+                onClick={() => navigate(AppView.FORM)}
+                className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all ${view === AppView.FORM ? 'text-primary scale-110' : 'text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'}`}
+            >
+                <ClipboardList size={24} strokeWidth={view === AppView.FORM ? 2.5 : 2} />
+                <span className="text-[10px] font-bold">Audit Fisik</span>
+            </button>
+            <button 
+                onClick={() => navigate(AppView.MASTER_DATA)}
+                className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all ${view === AppView.MASTER_DATA ? 'text-primary scale-110' : 'text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'}`}
+            >
+                <Database size={24} strokeWidth={view === AppView.MASTER_DATA ? 2.5 : 2} />
+                <span className="text-[10px] font-bold">Database</span>
+            </button>
         </div>
     </div>
   );

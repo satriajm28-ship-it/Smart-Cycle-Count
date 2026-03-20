@@ -46,7 +46,8 @@ export enum AppView {
   FORM = 'FORM',
   DASHBOARD = 'DASHBOARD',
   MASTER_DATA = 'MASTER_DATA',
-  DAMAGED_REPORT = 'DAMAGED_REPORT'
+  DAMAGED_REPORT = 'DAMAGED_REPORT',
+  WMS_INTEGRATION = 'WMS_INTEGRATION'
 }
 
 export interface InventoryStats {

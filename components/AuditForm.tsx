@@ -488,7 +488,7 @@ export const AuditForm: React.FC<AuditFormProps> = ({ onSuccess, initialLocation
             </section>
         </main>
 
-        <footer className="fixed bottom-0 left-0 right-0 z-30 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 p-4 pb-10 safe-area-pb shadow-[0_-4px_30px_rgba(0,0,0,0.1)]">
+        <footer className="fixed bottom-[calc(4.5rem+env(safe-area-inset-bottom))] left-0 right-0 z-30 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 p-4 shadow-[0_-4px_30px_rgba(0,0,0,0.1)]">
             <div className="max-w-lg mx-auto flex gap-3">
                 <button 
                   disabled={isSubmitting} 
