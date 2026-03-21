@@ -47,7 +47,19 @@ export enum AppView {
   DASHBOARD = 'DASHBOARD',
   MASTER_DATA = 'MASTER_DATA',
   DAMAGED_REPORT = 'DAMAGED_REPORT',
-  WMS_INTEGRATION = 'WMS_INTEGRATION'
+  WMS_INTEGRATION = 'WMS_INTEGRATION',
+  ACTIVITIES = 'ACTIVITIES'
+}
+
+export interface ActivityLog {
+  id: string;
+  type: 'create' | 'update' | 'delete' | 'scan' | 'adjustment' | 'alert' | 'start';
+  title: string;
+  description: string;
+  timestamp: number;
+  user: string;
+  details?: string;
+  photos?: string[];
 }
 
 export interface InventoryStats {

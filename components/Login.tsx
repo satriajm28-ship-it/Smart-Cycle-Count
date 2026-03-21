@@ -2,6 +2,7 @@
 import React, { useState } from 'react';
 import { Logo } from './Logo';
 import { authenticateUser, setSessionUser } from '../services/authService';
+import { saveActivityLog } from '../services/storageService';
 import { AppUser } from '../types';
 
 interface LoginProps {
@@ -24,6 +25,16 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
             const user = authenticateUser(username, password);
             if (user) {
                 setSessionUser(user);
+                
+                // Log login activity
+                saveActivityLog({
+                    type: 'adjustment',
+                    title: 'User Logged In',
+                    description: `${user.name} (${user.role}) has entered the system.`,
+                    user: user.name,
+                    details: `IP: ${window.location.hostname}`
+                }).catch(console.error);
+
                 onLoginSuccess(user);
             } else {
                 setError('Username atau Password salah.');

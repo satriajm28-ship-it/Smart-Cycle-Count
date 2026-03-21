@@ -16,13 +16,15 @@ import {
   DocumentData,
   QuerySnapshot
 } from 'firebase/firestore';
-import { AuditRecord, MasterItem, MasterLocation, LocationState, LocationStatusType } from '../types';
+import { AuditRecord, MasterItem, MasterLocation, LocationState, LocationStatusType, ActivityLog } from '../types';
+import { v4 as uuidv4 } from 'uuid';
 
 const COLLECTIONS = {
   MASTER_DATA: 'master_data',
   AUDIT_LOGS: 'audit_logs',
   MASTER_LOCATIONS: 'master_locations',
-  LOCATION_STATES: 'location_states'
+  LOCATION_STATES: 'location_states',
+  ACTIVITY_LOGS: 'activity_logs'
 };
 
 const BACKUP_COLLECTIONS = {
@@ -34,7 +36,8 @@ const LOCAL_KEYS = {
   MASTER_DATA: 'local_master_data',
   AUDIT_LOGS: 'local_audit_logs',
   LOCATIONS: 'local_locations',
-  STATES: 'local_states'
+  STATES: 'local_states',
+  ACTIVITY_LOGS: 'local_activity_logs'
 };
 
 let onPermissionError: ((error: FirestoreError) => void) | null = null;
@@ -110,6 +113,37 @@ export const subscribeToLocationStates = (onUpdate: (data: Record<string, Locati
   );
 };
 
+export const subscribeToActivityLogs = (onUpdate: (data: ActivityLog[]) => void, onError?: (error: FirestoreError) => void) => {
+  const q = query(collection(db, COLLECTIONS.ACTIVITY_LOGS), orderBy("timestamp", "desc"));
+  return onSnapshot(q, 
+    (snapshot) => {
+      const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as ActivityLog));
+      setLocal(LOCAL_KEYS.ACTIVITY_LOGS, data);
+      onUpdate(data);
+    }, 
+    (error) => {
+      if (error.code === 'permission-denied') {
+          onPermissionError?.(error);
+          onUpdate(getLocal<ActivityLog[]>(LOCAL_KEYS.ACTIVITY_LOGS, []));
+      } else if (onError) onError(error);
+    }
+  );
+};
+
+export const saveActivityLog = async (log: Omit<ActivityLog, 'id' | 'timestamp'>) => {
+  try {
+    const id = uuidv4();
+    const fullLog: ActivityLog = {
+      ...log,
+      id,
+      timestamp: Date.now()
+    };
+    await setDoc(doc(db, COLLECTIONS.ACTIVITY_LOGS, id), fullLog);
+  } catch (e) {
+    console.error("Failed to save activity log:", e);
+  }
+};
+
 export const getMasterData = async (): Promise<MasterItem[]> => {
     const local = getLocal<MasterItem[]>(LOCAL_KEYS.MASTER_DATA, []);
     if (local.length > 0) return local;
@@ -145,6 +179,14 @@ export const saveMasterData = async (items: MasterItem[], onProgress?: (progress
     }
     // Refresh local storage after all batches are committed
     await fetchMasterData();
+    
+    // Log activity
+    await saveActivityLog({
+        type: 'update',
+        title: 'Master Data Updated',
+        description: `Successfully imported ${total} items to master database.`,
+        user: 'System/Admin'
+    });
 };
 
 export const deleteAllMasterData = async (onStatus?: (msg: string) => void) => {
@@ -163,6 +205,14 @@ export const deleteAllMasterData = async (onStatus?: (msg: string) => void) => {
         if (onStatus) onStatus(`Cleaning: ${Math.round(((i + chunk.length) / total) * 100)}%`);
     }
     setLocal(LOCAL_KEYS.MASTER_DATA, []);
+    
+    // Log activity
+    await saveActivityLog({
+        type: 'delete',
+        title: 'Master Data Cleared',
+        description: 'All items in the master database have been deleted.',
+        user: 'Admin'
+    });
 };
 
 export const saveAuditLog = async (record: AuditRecord) => {
@@ -179,6 +229,16 @@ export const saveAuditLog = async (record: AuditRecord) => {
       }, { merge: true });
       
       window.dispatchEvent(new Event('auditDataChanged'));
+      
+      // Log activity
+      await saveActivityLog({
+          type: 'scan',
+          title: 'Scan Verified',
+          description: `Operator: ${record.teamMember} scanned ${record.physicalQty} units of SKU: ${record.sku}`,
+          user: record.teamMember,
+          details: `Location: ${record.location}`,
+          photos: record.evidencePhotos
+      });
   } catch (error: any) {
       console.error("Cloud save failed:", error);
       if (error.code === 'out-of-range' || error.message?.includes('too large')) {
@@ -192,6 +252,14 @@ export const updateAuditLog = async (id: string, updates: Partial<AuditRecord>) 
     try {
         await updateDoc(doc(db, COLLECTIONS.AUDIT_LOGS, id), updates);
         window.dispatchEvent(new Event('auditDataChanged'));
+        
+        // Log activity
+        await saveActivityLog({
+            type: 'update',
+            title: 'Audit Record Updated',
+            description: `Audit record ${id} was updated.`,
+            user: 'User/Admin'
+        });
     } catch (e) {
         console.error("Update failed:", e);
         throw e;
@@ -202,6 +270,14 @@ export const deleteAuditLog = async (id: string) => {
     try {
         await deleteDoc(doc(db, COLLECTIONS.AUDIT_LOGS, id));
         window.dispatchEvent(new Event('auditDataChanged'));
+        
+        // Log activity
+        await saveActivityLog({
+            type: 'delete',
+            title: 'Audit Record Deleted',
+            description: `Audit record ${id} was deleted.`,
+            user: 'Admin'
+        });
     } catch (e) {
         console.error("Cloud delete failed:", e);
         throw e;
@@ -281,6 +357,13 @@ export const resetAllAuditData = async (onStatus?: (msg: string) => void) => {
         window.dispatchEvent(new Event('auditDataChanged'));
         if (onStatus) onStatus("Selesai! Data lama tersimpan di backup.");
         
+        // Log activity
+        await saveActivityLog({
+            type: 'adjustment',
+            title: 'System Reset',
+            description: 'All audit data has been reset and moved to backup.',
+            user: 'Admin'
+        });
     } catch (e: any) {
         console.error("Reset failed:", e);
         throw new Error(e.message || "Gagal mereset data.");
@@ -306,6 +389,13 @@ export const restoreAuditData = async (onStatus?: (msg: string) => void) => {
         window.dispatchEvent(new Event('auditDataChanged'));
         if (onStatus) onStatus("Data berhasil dikembalikan!");
 
+        // Log activity
+        await saveActivityLog({
+            type: 'adjustment',
+            title: 'Data Restored',
+            description: 'Audit data has been restored from backup.',
+            user: 'Admin'
+        });
     } catch (e: any) {
         console.error("Restore failed:", e);
         throw new Error(e.message || "Gagal mengembalikan data.");
@@ -323,6 +413,18 @@ export const updateLocationStatus = async (
     };
     try {
         await setDoc(doc(db, COLLECTIONS.LOCATION_STATES, locationName), state, { merge: true });
+        
+        // Log activity
+        await saveActivityLog({
+            type: status === 'damaged' ? 'alert' : 'update',
+            title: status === 'damaged' ? 'Discrepancy Alert' : 'Location Status Updated',
+            description: status === 'damaged' 
+                ? `Critical mismatch detected in ${locationName}. Manual review required.`
+                : `Location ${locationName} status changed to ${status}.`,
+            user: data?.teamMember || 'System',
+            details: data?.description,
+            photos: data?.photoUrl ? [data.photoUrl] : undefined
+        });
     } catch (e) {
         console.error("Location status update failed:", e);
     }

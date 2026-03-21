@@ -4,6 +4,7 @@ import { AppView, AppUser } from './types';
 import { AuditForm } from './components/AuditForm';
 import { Dashboard } from './components/Dashboard';
 import { MasterData } from './components/MasterData';
+import { ActivityLogs } from './components/ActivityLogs';
 import { DamagedReport } from './components/DamagedReport';
 import { WMSIntegration } from './components/WMSIntegration';
 import { Logo } from './components/Logo';
@@ -11,7 +12,7 @@ import { Login } from './components/Login'; // Import Login
 import { auth } from './services/firebaseConfig';
 import * as firebaseAuth from 'firebase/auth';
 import { setPermissionErrorHandler } from './services/storageService';
-import { Home, ClipboardList, Database } from 'lucide-react';
+import { Home, ClipboardList, Database, Activity } from 'lucide-react';
 import { getSessionUser, clearSessionUser } from './services/authService';
 
 const { onAuthStateChanged, signInAnonymously } = firebaseAuth as any;
@@ -259,6 +260,12 @@ service cloud.firestore {
                     <WMSIntegration />
                 </div>
             )}
+
+            {view === AppView.ACTIVITIES && (
+                <div className="animate-fade-in">
+                    <ActivityLogs />
+                </div>
+            )}
         </div>
 
         {/* Bottom Navigation Bar */}
@@ -283,6 +290,13 @@ service cloud.firestore {
             >
                 <Database size={24} strokeWidth={view === AppView.MASTER_DATA ? 2.5 : 2} />
                 <span className="text-[10px] font-bold">Database</span>
+            </button>
+            <button 
+                onClick={() => navigate(AppView.ACTIVITIES)}
+                className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all ${view === AppView.ACTIVITIES ? 'text-primary scale-110' : 'text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'}`}
+            >
+                <Activity size={24} strokeWidth={view === AppView.ACTIVITIES ? 2.5 : 2} />
+                <span className="text-[10px] font-bold">Aktivitas</span>
             </button>
         </div>
     </div>
