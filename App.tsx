@@ -25,8 +25,6 @@ const App: React.FC = () => {
   const [isFirebaseConnected, setIsFirebaseConnected] = useState(false);
   const [currentUser, setCurrentUser] = useState<AppUser | null>(null);
   
-  const [hasPermissionError, setHasPermissionError] = useState(false);
-  const [showSetupHelper, setShowSetupHelper] = useState(false);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
 
   useEffect(() => {
@@ -47,7 +45,7 @@ const App: React.FC = () => {
     // 3. Permission Handler
     setPermissionErrorHandler((err) => {
         if (mounted && err.code === 'permission-denied') {
-            setHasPermissionError(true);
+            console.warn("Permission denied error detected:", err);
         }
     });
 
@@ -65,9 +63,6 @@ const App: React.FC = () => {
                 console.warn("Auth check failed:", error.message);
                 if (mounted) {
                     setIsFirebaseConnected(true); 
-                    if (error.code === 'auth/configuration-not-found' || error.code === 'auth/operation-not-allowed') {
-                        setHasPermissionError(true);
-                    }
                 }
             });
       }
@@ -125,19 +120,6 @@ const App: React.FC = () => {
   // 3. Main App
   return (
     <div className="min-h-screen bg-[#f6f6f8] relative">
-        {hasPermissionError && (
-            <div className="bg-amber-600 text-white px-4 py-2 text-[10px] sm:text-xs font-bold text-center sticky top-0 z-[100] flex items-center justify-center gap-2 shadow-lg">
-                <span className="material-symbols-outlined text-sm">database_off</span>
-                <span>Database Restricted: Rules Update Required.</span>
-                <button 
-                    onClick={() => setShowSetupHelper(true)} 
-                    className="ml-2 bg-white text-amber-700 px-3 py-1 rounded-full text-[9px] uppercase tracking-tighter hover:bg-amber-50 transition-colors"
-                >
-                    Fix Permissions
-                </button>
-            </div>
-        )}
-
         <div className="fixed bottom-[calc(4.5rem+env(safe-area-inset-bottom))] left-0 right-0 z-[120] pointer-events-none flex flex-col items-center justify-center opacity-80 select-none transition-all">
              {/* Network Status Indicator */}
              <div className={`flex items-center gap-1.5 mb-1 px-2 py-0.5 rounded-full backdrop-blur-sm ${isOnline ? 'bg-emerald-500/10' : 'bg-red-500/10'}`}>
@@ -152,82 +134,6 @@ const App: React.FC = () => {
                  <span className="text-[7px] font-bold text-slate-400 dark:text-slate-500 italic leading-tight">powered by Satria JM</span>
              </div>
         </div>
-
-        {showSetupHelper && (
-            <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-md animate-fade-in">
-                <div className="bg-white dark:bg-slate-900 rounded-3xl w-full max-w-xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
-                    <div className="bg-primary p-6 text-white flex justify-between items-start">
-                        <div>
-                            <h2 className="text-xl font-bold flex items-center gap-2">
-                                <span className="material-symbols-outlined">admin_panel_settings</span>
-                                Firestore Setup Required
-                            </h2>
-                            <p className="text-blue-100 text-xs mt-1">Selesaikan konfigurasi Firebase Anda agar data dapat tersinkronisasi antar perangkat.</p>
-                        </div>
-                        <button onClick={() => setShowSetupHelper(false)} className="bg-white/20 p-2 rounded-full hover:bg-white/30">
-                            <span className="material-symbols-outlined">close</span>
-                        </button>
-                    </div>
-                    
-                    <div className="p-6 overflow-y-auto space-y-6">
-                        <div className="space-y-3">
-                            <h3 className="font-bold text-slate-800 dark:text-slate-100 text-sm flex items-center gap-2">
-                                <span className="bg-slate-100 dark:bg-slate-800 w-6 h-6 rounded-full flex items-center justify-center text-[10px]">1</span>
-                                Aktifkan Anonymous Auth
-                            </h3>
-                            <p className="text-xs text-slate-600 dark:text-slate-400 ml-8 leading-relaxed">
-                                Buka <b>Authentication &gt; Settings &gt; Sign-in method</b>. Klik <b>Add new provider</b>, pilih <b>Anonymous</b>, dan klik <b>Enable</b>.
-                            </p>
-                        </div>
-
-                        <div className="space-y-3">
-                            <h3 className="font-bold text-slate-800 dark:text-slate-100 text-sm flex items-center gap-2">
-                                <span className="bg-slate-100 dark:bg-slate-800 w-6 h-6 rounded-full flex items-center justify-center text-[10px]">2</span>
-                                Update Firestore Security Rules
-                            </h3>
-                            <p className="text-xs text-slate-600 dark:text-slate-400 ml-8 leading-relaxed">
-                                Buka <b>Firestore Database &gt; Rules</b>. Ganti kode yang ada dengan kode di bawah ini:
-                            </p>
-                            <div className="ml-8 bg-slate-950 text-emerald-400 p-4 rounded-xl font-mono text-[10px] sm:text-xs overflow-x-auto relative group">
-                                <pre>{`rules_version = '2';
-service cloud.firestore {
-  match /databases/{database}/documents {
-    match /{document=**} {
-      allow read, write: if request.auth != null;
-    }
-  }
-}`}</pre>
-                                <button 
-                                    onClick={() => {
-                                        navigator.clipboard.writeText(`rules_version = '2';\nservice cloud.firestore {\n  match /databases/{database}/documents {\n    match /{document=**} {\n      allow read, write: if request.auth != null;\n    }\n  }\n}`);
-                                        alert("Rules copied to clipboard!");
-                                    }}
-                                    className="absolute top-2 right-2 bg-white/10 p-2 rounded-lg hover:bg-white/20 text-white"
-                                >
-                                    <span className="material-symbols-outlined text-sm">content_copy</span>
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 flex flex-col sm:flex-row gap-3">
-                        <a 
-                            href="https://console.firebase.google.com/project/smart-cycle-count/firestore/rules" 
-                            target="_blank" 
-                            className="flex-1 bg-primary text-white text-center py-3 rounded-xl font-bold text-sm shadow-lg shadow-primary/20 hover:bg-blue-700 transition-all flex items-center justify-center gap-2"
-                        >
-                            Open Firebase Console <span className="material-symbols-outlined text-sm">open_in_new</span>
-                        </a>
-                        <button 
-                            onClick={() => setShowSetupHelper(false)}
-                            className="flex-1 py-3 text-slate-500 font-bold hover:bg-slate-200 dark:hover:bg-slate-800 rounded-xl transition-colors text-sm"
-                        >
-                            Lanjutkan Mode Online
-                        </button>
-                    </div>
-                </div>
-            </div>
-        )}
 
         <div className="relative z-10 pb-20">
             {view === AppView.DASHBOARD && (

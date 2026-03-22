@@ -19,7 +19,7 @@ import {
   CheckCircle2, Package, MapPin, Clock, 
   BarChart3, Info, ChevronRight, LayoutDashboard,
   ArrowUpRight, ArrowDownRight, Minus, RefreshCw,
-  RotateCcw, LogOut
+  RotateCcw, LogOut, Plus
 } from 'lucide-react';
 
 interface DashboardProps {
@@ -57,6 +57,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, currentUser, o
   });
 
   const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+  const [showAdminMenu, setShowAdminMenu] = useState(false);
   
   // State for Reset/Restore Process
   const [isResetting, setIsResetting] = useState(false);
@@ -305,6 +307,15 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, currentUser, o
     XLSX.writeFile(wb, `Audit_Report_${new Date().toISOString().slice(0,10)}.xlsx`);
   };
 
+  const toggleGroupExpand = (sku: string) => {
+    setExpandedGroups(prev => {
+      const next = new Set(prev);
+      if (next.has(sku)) next.delete(sku);
+      else next.add(sku);
+      return next;
+    });
+  };
+
   const filteredGroups = groupedData.filter(g => {
       const matchSearch = g.name.toLowerCase().includes(searchQuery.toLowerCase()) || g.sku.toLowerCase().includes(searchQuery.toLowerCase());
       const matchFilter = activeFilter === 'all' ? true : g.status === activeFilter;
@@ -364,157 +375,186 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, currentUser, o
       )}
 
       {/* HEADER */}
-      <header className="sticky top-0 z-40 bg-white/80 dark:bg-[#050A18]/80 backdrop-blur-xl border-b border-slate-200 dark:border-slate-800 px-5 py-4 flex items-center justify-between">
+      <header className="sticky top-0 z-40 bg-white border-b border-slate-100 px-8 py-4 flex items-center justify-between shadow-sm">
         <div className="flex items-center gap-4">
-            <div className="p-1 bg-primary/10 rounded-xl">
-                <Logo size={40} />
-            </div>
-            <div>
-                <h1 className="text-base font-black uppercase tracking-tight text-slate-900 dark:text-white leading-none">Smart Dashboard</h1>
-                <div className="flex items-center gap-2 mt-1.5">
-                    <span className="text-[9px] font-bold text-primary uppercase tracking-[0.2em]">MEDIKA BINA INVESTAMA</span>
-                    <span className="text-[9px] text-slate-400 px-1 border-l border-slate-300 dark:border-slate-700">{currentUser.username}</span>
-                </div>
+            <Logo size={40} className="text-primary" />
+            <div className="flex flex-col">
+                <h1 className="text-2xl font-black text-[#2D5B9E] tracking-tight leading-none">SMART DASHBOARD</h1>
+                <p className="text-[11px] font-medium text-slate-400 mt-1 uppercase tracking-wider">Audit Physical Management System</p>
             </div>
         </div>
-        <div className="flex items-center gap-2">
-            {/* Admin-only Controls */}
-            {currentUser.role === 'admin' && (
-                <>
-                    <button 
-                        onClick={handleRestoreData}
-                        disabled={isRestoring || isResetting}
-                        title="Kembalikan Data (Undo Reset)"
-                        className="w-11 h-11 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-500 rounded-2xl flex items-center justify-center hover:bg-slate-50 hover:border-slate-300 active:scale-90 transition-all shadow-sm disabled:opacity-50"
-                    >
-                        {isRestoring ? <RefreshCw className="animate-spin" size={20} /> : <RotateCcw size={20} />}
-                    </button>
-                    <button 
-                        onClick={handleResetAllData}
-                        disabled={isResetting || isRestoring}
-                        title="Reset & Backup Data"
-                        className="w-11 h-11 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-red-500 rounded-2xl flex items-center justify-center hover:bg-red-50 hover:border-red-200 active:scale-90 transition-all shadow-sm disabled:opacity-50"
-                    >
-                        {isResetting ? <RefreshCw className="animate-spin" size={20} /> : <Trash2 size={20} />}
-                    </button>
-                </>
-            )}
-            
-            <button onClick={handleExportReport} className="w-11 h-11 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-emerald-600 rounded-2xl flex items-center justify-center hover:shadow-lg active:scale-90 transition-all shadow-sm">
-                <span className="material-symbols-outlined text-[24px]">sim_card_download</span>
+
+        <div className="flex-1 max-w-xl mx-8">
+            <div className="relative group">
+                <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none">
+                    <Search size={18} className="text-slate-400 group-focus-within:text-primary transition-colors" />
+                </div>
+                <input 
+                    type="text" 
+                    value={searchQuery} 
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full bg-[#F3F6F9] border-none rounded-xl py-3 pl-12 pr-4 text-sm font-medium focus:ring-2 focus:ring-primary/20 outline-none transition-all placeholder:text-slate-400" 
+                    placeholder="Cari SKU atau Nama Produk..." 
+                />
+            </div>
+        </div>
+
+        <div className="flex items-center gap-4">
+            <button className="p-2 text-slate-400 hover:text-primary hover:bg-slate-50 rounded-xl transition-all relative">
+                <span className="material-symbols-outlined text-[24px]">notifications</span>
+                <div className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full border-2 border-white"></div>
             </button>
             
-            <button onClick={onLogout} title="Logout" className="w-11 h-11 bg-slate-100 dark:bg-slate-800 border border-transparent text-slate-500 rounded-2xl flex items-center justify-center hover:bg-slate-200 active:scale-90 transition-all ml-2">
-                <LogOut size={20} />
-            </button>
+            <div className="relative">
+                <button 
+                    onClick={() => setShowAdminMenu(!showAdminMenu)}
+                    className={`p-2 rounded-xl transition-all ${showAdminMenu ? 'text-primary bg-slate-50' : 'text-slate-400 hover:text-primary hover:bg-slate-50'}`}
+                >
+                    <span className="material-symbols-outlined text-[24px]">settings</span>
+                </button>
+                
+                {showAdminMenu && (
+                    <div className="absolute right-0 mt-2 w-64 bg-white rounded-2xl shadow-2xl border border-slate-100 py-2 z-50 animate-in fade-in slide-in-from-top-2">
+                        <div className="px-4 py-2 border-b border-slate-50 mb-2">
+                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">System Settings</p>
+                        </div>
+                        
+                        <button 
+                            onClick={() => { handleExportReport(); setShowAdminMenu(false); }}
+                            className="w-full px-4 py-2.5 text-left text-sm font-bold text-slate-600 hover:bg-slate-50 flex items-center gap-3 transition-colors"
+                        >
+                            <BarChart3 size={16} /> Export Excel Report
+                        </button>
+
+                        {currentUser.role === 'admin' && (
+                            <>
+                                <div className="h-[1px] bg-slate-50 my-1"></div>
+                                <button 
+                                    onClick={() => { handleRestoreData(); setShowAdminMenu(false); }}
+                                    disabled={isRestoring}
+                                    className="w-full px-4 py-2.5 text-left text-sm font-bold text-[#2D5B9E] hover:bg-blue-50 flex items-center gap-3 transition-colors disabled:opacity-50"
+                                >
+                                    <RotateCcw size={16} className={isRestoring ? 'animate-spin' : ''} /> Restore from Backup
+                                </button>
+                                <button 
+                                    onClick={() => { handleResetAllData(); setShowAdminMenu(false); }}
+                                    disabled={isResetting}
+                                    className="w-full px-4 py-2.5 text-left text-sm font-bold text-red-500 hover:bg-red-50 flex items-center gap-3 transition-colors disabled:opacity-50"
+                                >
+                                    <RefreshCw size={16} className={isResetting ? 'animate-spin' : ''} /> Reset All Audit Data
+                                </button>
+                            </>
+                        )}
+
+                        <div className="h-[1px] bg-slate-50 my-1"></div>
+                        <button 
+                            onClick={() => { onLogout(); setShowAdminMenu(false); }}
+                            className="w-full px-4 py-2.5 text-left text-sm font-bold text-slate-500 hover:bg-slate-50 hover:text-red-500 flex items-center gap-3 transition-colors"
+                        >
+                            <LogOut size={16} /> Logout Account
+                        </button>
+                    </div>
+                )}
+            </div>
+
+            <div className="h-8 w-[1px] bg-slate-200 mx-2"></div>
+            
+            <div className="flex items-center gap-3">
+                <div className="flex flex-col items-end">
+                    <p className="text-xs font-black text-slate-800 leading-none">{currentUser.name}</p>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter mt-1">{currentUser.role}</p>
+                </div>
+            </div>
         </div>
       </header>
 
       {/* SUMMARY DASHBOARD CARDS */}
-      <section className="px-5 pt-6 grid grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className="group bg-white dark:bg-slate-900 p-5 rounded-[2rem] shadow-sm border border-slate-200 dark:border-slate-800 hover:border-primary/50 transition-colors">
-                <div className="flex items-center justify-between mb-2">
-                    <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest">Total Fisik</p>
-                    <div className="bg-primary/10 text-primary p-2 rounded-xl group-hover:scale-110 transition-transform">
-                        <Package size={18} />
+      <section className="px-8 pt-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div className="bg-white p-6 rounded-xl shadow-[0_4px_20px_rgba(0,0,0,0.03)] border border-slate-50 flex flex-col">
+                <div className="flex items-center justify-between mb-6">
+                    <div className="bg-[#E8F1FD] text-[#2D5B9E] p-3 rounded-lg">
+                        <Package size={20} />
                     </div>
+                    <p className="text-slate-400 text-[10px] font-black uppercase tracking-[0.15em]">Live Count</p>
                 </div>
-                <p className="text-3xl font-black text-slate-900 dark:text-white leading-none">{stats.totalAudited.toLocaleString()}</p>
-                <p className="text-[10px] text-slate-500 font-bold mt-2 uppercase tracking-tight">Units Audited</p>
+                <p className="text-4xl font-black text-slate-800 leading-none mb-2">{stats.totalAudited.toLocaleString()}</p>
+                <p className="text-[11px] text-slate-400 font-medium">Total Fisik Terhitung</p>
             </div>
 
-            <div className="group bg-white dark:bg-slate-900 p-5 rounded-[2rem] shadow-sm border border-slate-200 dark:border-slate-800 hover:border-emerald-500/50 transition-colors">
-                <div className="flex items-center justify-between mb-2">
-                    <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest">Akurasi (%)</p>
-                    <div className="bg-emerald-500/10 text-emerald-500 p-2 rounded-xl group-hover:scale-110 transition-transform">
-                        <CheckCircle2 size={18} />
+            <div className="bg-white p-6 rounded-xl shadow-[0_4px_20px_rgba(0,0,0,0.03)] border border-slate-50 flex flex-col">
+                <div className="flex items-center justify-between mb-6">
+                    <div className="bg-[#E9F7EF] text-[#27AE60] p-3 rounded-lg">
+                        <CheckCircle2 size={20} />
                     </div>
+                    <p className="text-slate-400 text-[10px] font-black uppercase tracking-[0.15em]">Reliability</p>
                 </div>
-                <p className="text-3xl font-black text-emerald-500 leading-none">{stats.accuracy}%</p>
-                <p className="text-[10px] text-slate-500 font-bold mt-2 uppercase tracking-tight">Data Validity</p>
+                <p className="text-4xl font-black text-slate-800 leading-none mb-2">{stats.accuracy}%</p>
+                <p className="text-[11px] text-slate-400 font-medium">Akurasi Audit</p>
             </div>
 
-            <div className="group bg-white dark:bg-slate-900 p-5 rounded-[2rem] shadow-sm border border-slate-200 dark:border-slate-800 hover:border-red-500/50 transition-colors">
-                <div className="flex items-center justify-between mb-2">
-                    <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest">Selisih Item</p>
-                    <div className="bg-red-500/10 text-red-500 p-2 rounded-xl group-hover:scale-110 transition-transform">
-                        <AlertTriangle size={18} />
+            <div className="bg-white p-6 rounded-xl shadow-[0_4px_20px_rgba(0,0,0,0.03)] border border-slate-50 flex flex-col">
+                <div className="flex items-center justify-between mb-6">
+                    <div className="bg-[#FDECEC] text-[#EB5757] p-3 rounded-lg">
+                        <AlertTriangle size={20} />
                     </div>
+                    <p className="text-slate-400 text-[10px] font-black uppercase tracking-[0.15em]">Requires Check</p>
                 </div>
-                <p className="text-3xl font-black text-red-500 leading-none">{stats.shortageCount + stats.surplusCount}</p>
-                <p className="text-[10px] text-slate-500 font-bold mt-2 uppercase tracking-tight">Requires Check</p>
+                <p className="text-4xl font-black text-slate-800 leading-none mb-2">{stats.shortageCount + stats.surplusCount}</p>
+                <p className="text-[11px] text-slate-400 font-medium">Selisih Item</p>
             </div>
 
-            <div className="group bg-white dark:bg-slate-900 p-5 rounded-[2rem] shadow-sm border border-slate-200 dark:border-slate-800 hover:border-slate-400 transition-colors">
-                <div className="flex items-center justify-between mb-2">
-                    <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest">Net Var</p>
-                    <div className={`p-2 rounded-xl group-hover:scale-110 transition-transform ${stats.netVariance < 0 ? 'bg-red-500/10 text-red-500' : stats.netVariance > 0 ? 'bg-primary/10 text-primary' : 'bg-slate-100 text-slate-400'}`}>
-                        <BarChart3 size={18} />
+            <div className="bg-white p-6 rounded-xl shadow-[0_4px_20px_rgba(0,0,0,0.03)] border border-slate-50 flex flex-col">
+                <div className="flex items-center justify-between mb-6">
+                    <div className="bg-[#F3F6F9] text-slate-500 p-3 rounded-lg">
+                        <BarChart3 size={20} />
                     </div>
+                    <p className="text-slate-400 text-[10px] font-black uppercase tracking-[0.15em]">Net Change</p>
                 </div>
-                <div className="flex items-baseline gap-1">
-                    <p className={`text-3xl font-black leading-none ${stats.netVariance < 0 ? 'text-red-500' : stats.netVariance > 0 ? 'text-primary' : 'text-slate-900 dark:text-white'}`}>
-                        {stats.netVariance > 0 ? '+' : ''}{stats.netVariance}
-                    </p>
-                    {stats.netVariance !== 0 && (
-                        <span className="text-xs">
-                            {stats.netVariance > 0 ? <ArrowUpRight size={14} className="text-primary"/> : <ArrowDownRight size={14} className="text-red-500"/>}
-                        </span>
-                    )}
-                </div>
-                <p className="text-[10px] text-slate-500 font-bold mt-2 uppercase tracking-tight">Total Variance</p>
+                <p className={`text-4xl font-black leading-none mb-2 ${stats.netVariance < 0 ? 'text-[#EB5757]' : stats.netVariance > 0 ? 'text-[#2D5B9E]' : 'text-slate-800'}`}>
+                    {stats.netVariance > 0 ? '+' : ''}{stats.netVariance}
+                </p>
+                <p className="text-[11px] text-slate-400 font-medium">Total Variance (Net Var)</p>
             </div>
       </section>
 
-      {/* SEARCH & FILTERS - STICKY COMPACT */}
-      <section className="px-5 mt-8 sticky top-[80px] z-30 bg-[#f8fafc]/80 dark:bg-[#050A18]/80 backdrop-blur-md pb-4">
-        <div className="flex flex-col sm:flex-row gap-4">
-            <div className="flex-1 bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 flex items-center px-4 h-12 ring-1 ring-black/5">
-                <Search size={18} className="text-slate-400" />
-                <input 
-                    type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
-                    className="flex-1 bg-transparent border-none text-sm p-3 focus:ring-0 outline-none font-medium placeholder:text-slate-400" 
-                    placeholder="Search SKU, Name or Location..." 
-                />
-                {searchQuery && (
-                    <button onClick={() => setSearchQuery('')} className="p-1 text-slate-400 hover:text-slate-600"><X size={16}/></button>
-                )}
-            </div>
-            <div className="flex gap-2 overflow-x-auto no-scrollbar scroll-smooth py-1">
+      {/* FILTERS & DATE */}
+      <section className="px-8 mt-10 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div className="flex bg-white p-1 rounded-xl shadow-sm border border-slate-100">
                 {[
-                    { id: 'all', label: 'All Items', color: 'primary' },
-                    { id: 'shortage', label: 'Shortage', color: 'red-500' },
-                    { id: 'surplus', label: 'Surplus', color: 'blue-500' },
-                    { id: 'matched', label: 'Matched', color: 'emerald-500' }
+                    { id: 'all', label: 'All Items' },
+                    { id: 'shortage', label: 'Shortage' },
+                    { id: 'surplus', label: 'Surplus' },
+                    { id: 'matched', label: 'Matched' }
                 ].map((f) => (
                     <button 
                         key={f.id}
                         onClick={() => setActiveFilter(f.id as any)} 
-                        className={`px-5 h-10 rounded-2xl text-[10px] font-black uppercase tracking-widest border transition-all flex-shrink-0 flex items-center gap-2 ${
+                        className={`px-6 py-2.5 rounded-lg text-xs font-bold transition-all ${
                             activeFilter === f.id 
-                            ? `bg-${f.color === 'primary' ? 'primary' : f.color} text-white border-transparent shadow-lg` 
-                            : 'bg-white dark:bg-slate-900 text-slate-500 border-slate-200 dark:border-slate-800 hover:bg-slate-50'
+                            ? 'bg-[#2D5B9E] text-white shadow-md' 
+                            : 'text-slate-500 hover:bg-slate-50'
                         }`}
                     >
-                        {f.id === 'matched' && <CheckCircle2 size={12}/>}
-                        {f.id === 'shortage' && <ArrowDownRight size={12}/>}
-                        {f.id === 'surplus' && <ArrowUpRight size={12}/>}
                         {f.label}
                     </button>
                 ))}
             </div>
-        </div>
+
+            <div className="flex items-center gap-2 text-slate-500 bg-white px-4 py-2.5 rounded-xl border border-slate-100 shadow-sm">
+                <Clock size={16} />
+                <span className="text-xs font-bold uppercase tracking-tight">Today: {new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+            </div>
       </section>
 
       {/* SKU LIST - NEW MODERN CARDS */}
-      <main className="px-5 space-y-4 mt-2">
+      <main className="px-8 space-y-6 mt-8">
         {filteredGroups.length === 0 ? (
             <div className="py-24 text-center flex flex-col items-center justify-center space-y-4 opacity-30">
-                <div className="w-20 h-20 bg-slate-200 dark:bg-slate-800 rounded-full flex items-center justify-center">
+                <div className="w-20 h-20 bg-slate-100 rounded-full flex items-center justify-center">
                     <Search size={40} className="text-slate-400" />
                 </div>
                 <div className="space-y-1">
-                    <p className="text-base font-black uppercase tracking-widest text-slate-900 dark:text-white">No items found</p>
+                    <p className="text-base font-black uppercase tracking-widest text-slate-900">No items found</p>
                     <p className="text-xs font-medium">Try adjusting your filters or search keywords</p>
                 </div>
             </div>
@@ -523,160 +563,123 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, currentUser, o
             const isSurplus = group.status === 'surplus';
             const isMatched = group.status === 'matched';
             
-            const accentColor = isShortage ? 'bg-red-500' : isSurplus ? 'bg-blue-500' : 'bg-emerald-500';
-            const textColor = isShortage ? 'text-red-600' : isSurplus ? 'text-blue-600' : 'text-emerald-600';
-            const bgColor = isShortage ? 'bg-red-50' : isSurplus ? 'bg-blue-50' : 'bg-emerald-50';
+            const statusColor = isShortage ? 'bg-[#EB5757] text-white' : isSurplus ? 'bg-[#2D5B9E] text-white' : 'bg-[#27AE60] text-white';
+            const progressColor = isShortage ? 'bg-[#EB5757]' : isSurplus ? 'bg-[#2D5B9E]' : 'bg-[#27AE60]';
             
             const progress = Math.min(100, (group.totalPhysical / Math.max(1, group.totalSystem)) * 100);
             
             return (
-                <details key={group.sku} className="group bg-white dark:bg-slate-900 rounded-[2rem] border border-slate-200 dark:border-slate-800 overflow-hidden shadow-sm hover:shadow-md transition-all duration-300">
-                    <summary className="list-none cursor-pointer select-none">
-                        <div className="flex items-stretch min-h-[100px]">
-                            {/* Color Indicator Strip */}
-                            <div className={`w-2 ${accentColor}`}></div>
-                            
-                            <div className="flex-1 p-5 flex flex-col justify-between">
-                                <div className="flex justify-between items-start gap-4">
-                                    <div className="min-w-0">
-                                        <div className="flex items-center gap-2 mb-2 flex-wrap">
-                                            <span className="text-[10px] font-mono font-bold text-slate-500 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-lg border border-slate-200/50 dark:border-slate-700/50">{group.sku}</span>
-                                            <span className={`px-2.5 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-tight flex items-center gap-1 ${bgColor} ${textColor} dark:bg-opacity-10`}>
-                                                {isMatched && <CheckCircle2 size={10}/>}
-                                                {isShortage && <ArrowDownRight size={10}/>}
-                                                {isSurplus && <ArrowUpRight size={10}/>}
-                                                {group.status}
-                                            </span>
-                                        </div>
-                                        <h3 className="text-sm font-black uppercase tracking-tight line-clamp-1 text-slate-800 dark:text-white">{group.name}</h3>
-                                    </div>
-                                    <div className="text-right flex-shrink-0">
-                                        <div className="flex items-baseline justify-end gap-1">
-                                            <span className="text-lg font-black leading-none text-slate-900 dark:text-white">{group.totalPhysical}</span>
-                                            <span className="text-[10px] font-bold text-slate-400 uppercase">/ {group.totalSystem}</span>
-                                        </div>
-                                        <p className={`text-[11px] font-black mt-1.5 flex items-center justify-end gap-1 ${group.variance < 0 ? 'text-red-500' : group.variance > 0 ? 'text-blue-500' : 'text-emerald-500'}`}>
-                                            {group.variance === 0 ? <Minus size={12}/> : (group.variance > 0 ? <ArrowUpRight size={12}/> : <ArrowDownRight size={12}/>)}
-                                            {group.variance !== 0 ? Math.abs(group.variance) : 'Balance'}
-                                        </p>
-                                    </div>
-                                </div>
-
-                                {/* Modern Progress Bar */}
-                                <div className="mt-4">
-                                    <div className="flex justify-between items-center mb-1.5">
-                                        <div className="flex items-center gap-2">
-                                            <div className={`w-1.5 h-1.5 rounded-full ${accentColor}`}></div>
-                                            <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Accuracy Level</span>
-                                        </div>
-                                        <span className={`text-[10px] font-black ${textColor}`}>{progress.toFixed(0)}%</span>
-                                    </div>
-                                    <div className="h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden border border-slate-200/30 dark:border-slate-700/30">
-                                        <div 
-                                            className={`h-full transition-all duration-1000 ease-out shadow-[0_0_10px_rgba(0,0,0,0.1)] ${accentColor}`} 
-                                            style={{ width: `${progress}%` }}
-                                        ></div>
-                                    </div>
-                                </div>
-                            </div>
-                            <div className="w-12 flex items-center justify-center text-slate-300 group-open:rotate-180 transition-transform">
-                                <ChevronRight size={20} />
-                            </div>
-                        </div>
-                    </summary>
-
-                    {/* EXPANDED TIMELINE AUDIT LOGS */}
-                    <div className="bg-slate-50 dark:bg-slate-950/40 border-t border-slate-100 dark:border-slate-800 p-6 space-y-5 animate-fade-in">
-                        <div className="flex items-center justify-between px-1">
-                            <div className="flex items-center gap-2">
-                                <Clock size={14} className="text-slate-400" />
-                                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Audit Activity Log</span>
-                            </div>
-                            <span className="text-[9px] font-bold text-slate-400">{group.logs.length} Scans</span>
+                <div key={group.sku} className="bg-white rounded-2xl shadow-[0_4px_25px_rgba(0,0,0,0.04)] border border-slate-50 overflow-hidden flex flex-col lg:flex-row">
+                    {/* Left Section: Info */}
+                    <div className="flex-1 p-8 border-b lg:border-b-0 lg:border-r border-slate-100 relative">
+                        <div className="flex justify-between items-start mb-6">
+                            <span className="bg-[#F3F6F9] text-[#2D5B9E] px-4 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-tight">SKU: {group.sku}</span>
+                            <span className={`${statusColor} px-4 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest shadow-sm`}>
+                                {group.status}
+                            </span>
                         </div>
                         
-                        <div className="relative space-y-4 before:absolute before:left-[19px] before:top-2 before:bottom-2 before:w-[2px] before:bg-slate-200 dark:before:bg-slate-800">
-                            {group.logs.map((log, idx) => (
-                                <div key={log.id} className="relative pl-12">
-                                    {/* Timeline Marker */}
-                                    <div className={`absolute left-0 top-0 w-10 h-10 rounded-xl flex items-center justify-center border-4 border-slate-50 dark:border-slate-950 z-10 ${accentColor} text-white shadow-lg shadow-black/10`}>
-                                        <MapPin size={18} />
-                                    </div>
+                        <h3 className="text-2xl font-black text-slate-800 uppercase tracking-tight mb-8 leading-tight">{group.name}</h3>
+                        
+                        <div className="mt-auto">
+                            <div className="flex justify-between items-center mb-3">
+                                <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Accuracy Confidence</span>
+                                <span className={`text-xs font-black ${progress === 100 ? 'text-[#27AE60]' : 'text-slate-800'}`}>{progress.toFixed(0)}%</span>
+                            </div>
+                            <div className="h-3 bg-[#F3F6F9] rounded-full overflow-hidden p-0.5">
+                                <div 
+                                    className={`h-full rounded-full transition-all duration-1000 ease-out shadow-[0_0_10px_rgba(0,0,0,0.1)] ${progressColor}`} 
+                                    style={{ width: `${progress}%` }}
+                                ></div>
+                            </div>
+                        </div>
+                    </div>
 
-                                    <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm group/log hover:border-primary/40 transition-colors">
-                                        <div className="flex flex-col sm:flex-row justify-between items-start gap-4">
-                                            <div className="flex-1 space-y-1">
-                                                <div className="flex items-center gap-3">
-                                                    <h4 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-tight">{log.location}</h4>
-                                                    <div className="flex items-center gap-1.5 text-slate-400">
-                                                        <Clock size={12}/>
-                                                        <span className="text-[10px] font-bold">{new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                                                    </div>
-                                                </div>
-                                                <div className="flex flex-wrap gap-2 pt-1">
-                                                    <span className="bg-slate-100 dark:bg-slate-800 text-slate-500 px-2 py-0.5 rounded text-[9px] font-bold uppercase">Batch: {log.batchNumber}</span>
-                                                    <span className="bg-slate-100 dark:bg-slate-800 text-slate-500 px-2 py-0.5 rounded text-[9px] font-bold uppercase">EXP: {log.expiryDate}</span>
-                                                </div>
-                                            </div>
-                                            
-                                            <div className="flex items-center sm:flex-col items-end gap-3 self-stretch justify-between sm:justify-start">
-                                                <div className="text-right">
-                                                    <p className="text-base font-black text-slate-900 dark:text-white">{log.physicalQty} <span className="text-[10px] text-slate-400 uppercase">{group.unit}</span></p>
-                                                    <div className="flex items-center justify-end gap-1.5 mt-0.5">
-                                                        <div className="w-4 h-4 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center overflow-hidden">
-                                                            <span className="text-[7px] font-black text-slate-500 uppercase">{log.teamMember.charAt(0)}</span>
-                                                        </div>
-                                                        <span className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">{log.teamMember}</span>
-                                                    </div>
-                                                </div>
-                                                <div className="flex gap-2">
-                                                    <button onClick={(e) => handleEditClick(log, e)} className="p-2.5 bg-slate-50 dark:bg-slate-800 text-slate-400 rounded-xl hover:text-primary hover:bg-primary/5 transition-all"><Pencil size={14} /></button>
-                                                    
+                    {/* Right Section: Activity Log */}
+                    <div className="lg:w-[450px] p-8 bg-[#FAFBFC]">
+                        <div className="flex items-center gap-2 mb-6">
+                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Audit Activity Log</span>
+                        </div>
+                        
+                        <div className="space-y-6">
+                            {(expandedGroups.has(group.sku) ? group.logs : group.logs.slice(0, 2)).map((log) => (
+                                <div key={log.id} className="flex items-start justify-between group relative">
+                                    <div className="flex gap-4">
+                                        <span className="text-[11px] font-bold text-slate-400 mt-1">{new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })}</span>
+                                        <div>
+                                            <div className="flex items-center gap-2">
+                                                <h4 className="text-sm font-black text-slate-800 leading-tight">Physical Count Input</h4>
+                                                <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                    <button 
+                                                        onClick={(e) => handleEditClick(log, e)}
+                                                        className="p-1 text-slate-400 hover:text-primary hover:bg-white rounded-md transition-all"
+                                                    >
+                                                        <Pencil size={12} />
+                                                    </button>
                                                     {currentUser.role === 'admin' && (
-                                                        <button onClick={(e) => handleDelete(log.id, e)} className="p-2.5 bg-slate-50 dark:bg-slate-800 text-slate-400 rounded-xl hover:text-red-500 hover:bg-red-500/5 transition-all"><Trash2 size={14} /></button>
+                                                        <button 
+                                                            onClick={(e) => handleDelete(log.id, e)}
+                                                            className="p-1 text-slate-400 hover:text-red-500 hover:bg-white rounded-md transition-all"
+                                                        >
+                                                            <Trash2 size={12} />
+                                                        </button>
                                                     )}
                                                 </div>
                                             </div>
+                                            <p className="text-[11px] text-slate-400 font-medium mt-1">Operator: {log.teamMember}</p>
+                                            <div className="flex items-center gap-3 mt-2">
+                                                <div className="flex items-center gap-1 bg-white px-2 py-0.5 rounded border border-slate-100">
+                                                    <Package size={10} className="text-slate-400" />
+                                                    <span className="text-[10px] font-bold text-slate-700">{log.physicalQty} {group.unit}</span>
+                                                </div>
+                                                <div className="flex items-center gap-1 bg-white px-2 py-0.5 rounded border border-slate-100">
+                                                    <MapPin size={10} className="text-slate-400" />
+                                                    <span className="text-[10px] font-bold text-slate-700 uppercase">{log.location}</span>
+                                                </div>
+                                            </div>
                                         </div>
-
-                                        {log.notes && (
-                                            <div className="mt-4 flex gap-3 items-start bg-blue-50/50 dark:bg-blue-900/10 p-4 rounded-2xl border border-blue-100/50 dark:border-blue-900/20">
-                                                <Info size={16} className="text-primary flex-shrink-0" />
-                                                <p className="text-[11px] text-slate-600 dark:text-slate-400 italic font-medium leading-relaxed">"{log.notes}"</p>
-                                            </div>
-                                        )}
-
-                                        {log.evidencePhotos && log.evidencePhotos.length > 0 && (
-                                            <div className="mt-5 space-y-2">
-                                                <div className="flex items-center gap-2 px-1">
-                                                    <ImageIcon size={12} className="text-slate-400"/>
-                                                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Visual Proof ({log.evidencePhotos.length})</span>
-                                                </div>
-                                                <div className="flex gap-3 overflow-x-auto no-scrollbar pb-1 pt-1">
-                                                    {log.evidencePhotos.map((photo, pIdx) => (
-                                                        <div 
-                                                            key={pIdx} 
-                                                            onClick={() => setPreviewImage(photo)}
-                                                            className="relative w-20 h-20 rounded-2xl overflow-hidden border-2 border-slate-100 dark:border-slate-800 bg-slate-100 flex-shrink-0 group/photo cursor-zoom-in hover:border-primary/50 transition-all shadow-sm"
-                                                        >
-                                                            <img src={photo} className="w-full h-full object-cover group-hover/photo:scale-110 transition-transform duration-500" alt="Evidence" />
-                                                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center backdrop-blur-[2px]">
-                                                                <ZoomIn size={18} className="text-white" />
-                                                            </div>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            </div>
-                                        )}
                                     </div>
+                                    {log.evidencePhotos && log.evidencePhotos.length > 0 ? (
+                                        <div 
+                                            onClick={() => setPreviewImage(log.evidencePhotos![0])}
+                                            className="w-14 h-10 rounded-lg overflow-hidden border border-slate-200 cursor-pointer hover:scale-105 transition-transform shrink-0"
+                                        >
+                                            <img src={log.evidencePhotos[0]} className="w-full h-full object-cover" alt="Proof" />
+                                        </div>
+                                    ) : (
+                                        <div className="w-14 h-10 rounded-lg bg-slate-200/50 border border-slate-100 flex items-center justify-center shrink-0">
+                                            <span className="text-[8px] font-bold text-slate-300 uppercase">Visual</span>
+                                        </div>
+                                    )}
                                 </div>
                             ))}
+                            {group.logs.length === 0 && (
+                                <div className="py-4 text-center">
+                                    <p className="text-[10px] font-bold text-slate-300 uppercase tracking-widest">No activity recorded</p>
+                                </div>
+                            )}
+                            {group.logs.length > 2 && (
+                                <button 
+                                    onClick={() => toggleGroupExpand(group.sku)}
+                                    className="w-full py-2 text-[10px] font-black text-[#2D5B9E] uppercase tracking-widest hover:bg-white rounded-lg transition-colors border border-dashed border-slate-200 mt-2"
+                                >
+                                    {expandedGroups.has(group.sku) ? 'Show Less' : `View ${group.logs.length - 2} More Entries`}
+                                </button>
+                            )}
                         </div>
                     </div>
-                </details>
+                </div>
             );
         })}
       </main>
+
+      {/* Floating Action Button */}
+      <button 
+        onClick={() => onNavigate(AppView.FORM)}
+        className="fixed bottom-24 right-8 w-14 h-14 bg-[#2D5B9E] text-white rounded-2xl shadow-2xl flex items-center justify-center hover:scale-110 active:scale-95 transition-all z-50"
+      >
+        <Plus size={28} strokeWidth={3} />
+      </button>
 
       {/* Footer Branding Overlay */}
       <div className="fixed bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-slate-200/50 dark:from-black/50 to-transparent pointer-events-none z-30"></div>
