@@ -1,7 +1,7 @@
 
 import { AppUser } from "../types";
 import { db } from "./firebaseConfig";
-import { doc, getDoc, setDoc, collection, getDocs } from "firebase/firestore";
+import { doc, getDoc, setDoc, collection, getDocs, deleteDoc } from "firebase/firestore";
 
 const STORAGE_KEY = 'app_session_user';
 
@@ -23,6 +23,47 @@ export const authenticateUser = async (username: string, password: string): Prom
     } catch (e) {
         console.error("Auth failed:", e);
         return null;
+    }
+};
+
+// Get all users from Firestore
+export const getAllUsers = async (): Promise<AppUser[]> => {
+    try {
+        const usersSnap = await getDocs(collection(db, 'users'));
+        return usersSnap.docs.map(doc => {
+            const data = doc.data();
+            return {
+                username: data.username,
+                role: data.role,
+                name: data.name,
+                password: data.password // We include password for management purposes
+            } as any;
+        });
+    } catch (e) {
+        console.error("Failed to fetch users:", e);
+        return [];
+    }
+};
+
+// Save or update a user in Firestore
+export const saveUser = async (user: any) => {
+    try {
+        await setDoc(doc(db, 'users', user.username), user, { merge: true });
+        return true;
+    } catch (e) {
+        console.error("Failed to save user:", e);
+        return false;
+    }
+};
+
+// Delete a user from Firestore
+export const deleteUser = async (username: string) => {
+    try {
+        await deleteDoc(doc(db, 'users', username));
+        return true;
+    } catch (e) {
+        console.error("Failed to delete user:", e);
+        return false;
     }
 };
 

@@ -19,7 +19,7 @@ import {
   CheckCircle2, Package, MapPin, Clock, 
   BarChart3, Info, ChevronRight, LayoutDashboard,
   ArrowUpRight, ArrowDownRight, Minus, RefreshCw,
-  RotateCcw, LogOut, Plus
+  RotateCcw, LogOut, Plus, User
 } from 'lucide-react';
 
 interface DashboardProps {
@@ -429,6 +429,12 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, currentUser, o
                         {currentUser.role === 'admin' && (
                             <>
                                 <div className="h-[1px] bg-slate-50 my-1"></div>
+                                <button 
+                                    onClick={() => { onNavigate(AppView.USER_MANAGEMENT); setShowAdminMenu(false); }}
+                                    className="w-full px-4 py-2.5 text-left text-sm font-bold text-slate-600 hover:bg-slate-50 flex items-center gap-3 transition-colors"
+                                >
+                                    <User size={16} /> User Management (Firebase)
+                                </button>
                                 <button 
                                     onClick={() => { handleRestoreData(); setShowAdminMenu(false); }}
                                     disabled={isRestoring}
