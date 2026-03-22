@@ -29,14 +29,7 @@ const persistentMultipleTabManager = (firebaseFirestore as any).persistentMultip
  * NOTE: You must enable "Anonymous" provider in Firebase Console -> Authentication -> Settings.
  */
 
-const firebaseConfig = {
-  apiKey: "AIzaSyAW85HLoKFugnzSDjk4v_Sb6NZI2BzbjP4",
-  authDomain: "smart-cycle-count.firebaseapp.com",
-  projectId: "smart-cycle-count",
-  storageBucket: "smart-cycle-count.firebasestorage.app",
-  messagingSenderId: "921554575755",
-  appId: "1:921554575755:web:7a2af4cda21b80a36acf8e"
-};
+import firebaseConfig from "../firebase-applet-config.json";
 
 const app = initializeApp(firebaseConfig);
 
@@ -47,6 +40,6 @@ export const db = initializeFirestore(app, {
     tabManager: persistentMultipleTabManager ? persistentMultipleTabManager() : undefined
   }) : undefined,
   experimentalAutoDetectLongPolling: true
-}) as Firestore;
+}, firebaseConfig.firestoreDatabaseId) as Firestore;
 
 export const auth = getAuth(app);

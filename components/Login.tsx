@@ -15,14 +15,13 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setError('');
         setLoading(true);
 
-        // Simulate network delay for UX
-        setTimeout(() => {
-            const user = authenticateUser(username, password);
+        try {
+            const user = await authenticateUser(username, password);
             if (user) {
                 setSessionUser(user);
                 
@@ -40,7 +39,10 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
                 setError('Username atau Password salah.');
                 setLoading(false);
             }
-        }, 800);
+        } catch (e) {
+            setError('Terjadi kesalahan sistem.');
+            setLoading(false);
+        }
     };
 
     return (

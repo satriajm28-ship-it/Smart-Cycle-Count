@@ -1,34 +1,54 @@
 
 import { AppUser } from "../types";
+import { db } from "./firebaseConfig";
+import { doc, getDoc, setDoc, collection, getDocs } from "firebase/firestore";
 
 const STORAGE_KEY = 'app_session_user';
 
-// Authenticate user against the requested hardcoded list
-export const authenticateUser = (username: string, password: string): AppUser | null => {
-    
-    // 1. Check Admin
-    if (username === 'admin' && password === 'admin123') {
-        return {
-            username: 'admin',
-            role: 'admin',
-            name: 'Administrator'
-        };
-    }
-
-    // 2. Check Users 1-20
-    // Pattern: UserX / UserX
-    if (username.startsWith('User') && password === username) {
-        const numberPart = parseInt(username.replace('User', ''));
-        if (!isNaN(numberPart) && numberPart >= 1 && numberPart <= 20) {
-            return {
-                username: username,
-                role: 'user',
-                name: `Staff ${numberPart}`
-            };
+// Authenticate user against Firestore
+export const authenticateUser = async (username: string, password: string): Promise<AppUser | null> => {
+    try {
+        const userDoc = await getDoc(doc(db, 'users', username));
+        if (userDoc.exists()) {
+            const data = userDoc.data();
+            if (data.password === password) {
+                return {
+                    username: data.username,
+                    role: data.role,
+                    name: data.name
+                };
+            }
         }
+        return null;
+    } catch (e) {
+        console.error("Auth failed:", e);
+        return null;
     }
+};
 
-    return null;
+// Bootstrap users if the collection is empty
+export const bootstrapUsers = async () => {
+    try {
+        const usersSnap = await getDocs(collection(db, 'users'));
+        if (usersSnap.empty) {
+            console.log("Bootstrapping users to Firestore...");
+            const users = [
+                { username: 'admin', password: 'admin123', role: 'admin', name: 'Administrator' },
+                ...Array.from({ length: 20 }, (_, i) => ({
+                    username: `User${i + 1}`,
+                    password: `User${i + 1}`,
+                    role: 'user',
+                    name: `Staff ${i + 1}`
+                }))
+            ];
+            for (const user of users) {
+                await setDoc(doc(db, 'users', user.username), user);
+            }
+            console.log("Bootstrapping complete.");
+        }
+    } catch (e) {
+        console.error("Bootstrap failed:", e);
+    }
 };
 
 export const getSessionUser = (): AppUser | null => {

@@ -1,0 +1,35 @@
+{
+  "entities": {
+    "AppUser": {
+      "title": "AppUser",
+      "description": "User credentials and profile information",
+      "type": "object",
+      "properties": {
+        "username": {
+          "type": "string",
+          "description": "Unique username for login"
+        },
+        "password": {
+          "type": "string",
+          "description": "Password for login (hashed or plain for this demo)"
+        },
+        "role": {
+          "type": "string",
+          "enum": ["admin", "user"],
+          "description": "User role"
+        },
+        "name": {
+          "type": "string",
+          "description": "Display name"
+        }
+      },
+      "required": ["username", "password", "role", "name"]
+    }
+  },
+  "firestore": {
+    "/users/{username}": {
+      "schema": "AppUser",
+      "description": "Collection of users indexed by username"
+    }
+  }
+}

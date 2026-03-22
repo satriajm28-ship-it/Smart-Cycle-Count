@@ -13,7 +13,7 @@ import { auth } from './services/firebaseConfig';
 import * as firebaseAuth from 'firebase/auth';
 import { setPermissionErrorHandler } from './services/storageService';
 import { Home, ClipboardList, Database, Activity } from 'lucide-react';
-import { getSessionUser, clearSessionUser } from './services/authService';
+import { getSessionUser, clearSessionUser, bootstrapUsers } from './services/authService';
 
 const { onAuthStateChanged, signInAnonymously } = firebaseAuth as any;
 
@@ -54,7 +54,11 @@ const App: React.FC = () => {
     // 4. Firebase Anonymous Auth (Background)
     const unsubscribe = onAuthStateChanged(auth, (user: any) => {
       if (user) {
-        if (mounted) setIsFirebaseConnected(true);
+        if (mounted) {
+            setIsFirebaseConnected(true);
+            // Bootstrap users once connected
+            bootstrapUsers();
+        }
       } else {
         signInAnonymously(auth)
             .catch((error: any) => {
