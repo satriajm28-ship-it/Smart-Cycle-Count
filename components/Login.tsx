@@ -14,6 +14,9 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
+    
+    // State for sliding panel animation
+    const [isRightPanelActive, setIsRightPanelActive] = useState(false);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -43,6 +46,12 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
             setError('Terjadi kesalahan sistem.');
             setLoading(false);
         }
+    };
+
+    const handleRequestAccess = (e: React.FormEvent) => {
+        e.preventDefault();
+        alert("Permintaan akses telah dikirim ke Administrator IT.");
+        setIsRightPanelActive(false);
     };
 
     return (
@@ -80,26 +89,20 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
                     <div className="absolute bottom-1/4 right-1/4 w-64 h-64 bg-[#003366] rounded-full blur-[96px]"></div>
                 </div>
 
-                <div className="w-full max-w-md relative z-10">
-                    {/* Glassmorphism Login Card */}
-                    <div className="p-8 rounded-xl shadow-[0_40px_80px_rgba(0,30,64,0.25)] flex flex-col gap-8 overflow-hidden relative" style={{
-                        background: 'rgba(255, 255, 255, 0.7)',
-                        backdropFilter: 'blur(20px)',
-                        WebkitBackdropFilter: 'blur(20px)',
-                        borderTop: '1px solid rgba(167, 200, 255, 0.2)'
-                    }}>
-                        {/* Visual Accent */}
-                        <div className="absolute top-0 left-0 w-1 h-full bg-[#006875]"></div>
-                        
-                        <div className="flex flex-col gap-2">
+                {/* Sliding Panel Container */}
+                <div className="relative w-full max-w-[900px] h-[600px] bg-white/80 backdrop-blur-xl rounded-2xl shadow-[0_40px_80px_rgba(0,30,64,0.35)] overflow-hidden z-10 border-t border-white/40">
+                    
+                    {/* Sign In Form (Left Panel) */}
+                    <div className={`absolute top-0 left-0 h-full w-1/2 transition-all duration-700 ease-in-out flex flex-col justify-center px-12 ${isRightPanelActive ? 'translate-x-[100%] opacity-0 z-10' : 'translate-x-0 opacity-100 z-20'}`}>
+                        <div className="flex flex-col gap-2 mb-8">
                             <div className="flex items-center gap-2 mb-2">
                                 <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-[#00e3fd] text-[#00616d] uppercase tracking-wider">Internal System</span>
                             </div>
                             <h1 className="text-3xl font-headline font-extrabold text-[#001e40] tracking-tight leading-none">Stock Opname</h1>
-                            <p className="text-[#43474f] text-sm font-medium">Silakan masuk menggunakan kredensial pegawai Anda.</p>
+                            <p className="text-[#43474f] text-sm font-medium">Masuk dengan kredensial Anda.</p>
                         </div>
 
-                        <form onSubmit={handleSubmit} className="flex flex-col gap-6">
+                        <form onSubmit={handleSubmit} className="flex flex-col gap-5">
                             {error && (
                                 <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3 flex items-center gap-3">
                                     <span className="material-symbols-outlined text-red-500">error</span>
@@ -107,25 +110,20 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
                                 </div>
                             )}
 
-                            <div className="flex flex-col gap-5">
-                                {/* ID Pegawai Field */}
+                            <div className="flex flex-col gap-4">
                                 <div className="flex flex-col gap-2">
                                     <label className="font-label text-xs font-semibold uppercase tracking-widest text-[#43474f] flex items-center gap-2" htmlFor="id_pegawai">USER NAME</label>
-                                    <div className="relative group">
-                                        <input 
-                                            className="w-full bg-[#e6e8ea] border-none rounded-lg px-4 py-3.5 text-[#001e40] font-medium focus:ring-2 focus:ring-[#006875]/20 focus:bg-[#ffffff] transition-all duration-300 placeholder:text-[#737780]/50 outline-none" 
-                                            id="id_pegawai" 
-                                            name="id_pegawai" 
-                                            placeholder="MBI-XXXX" 
-                                            type="text"
-                                            value={username}
-                                            onChange={(e) => setUsername(e.target.value)}
-                                            autoFocus
-                                        />
-                                    </div>
+                                    <input 
+                                        className="w-full bg-[#e6e8ea] border-none rounded-lg px-4 py-3.5 text-[#001e40] font-medium focus:ring-2 focus:ring-[#006875]/20 focus:bg-[#ffffff] transition-all duration-300 placeholder:text-[#737780]/50 outline-none" 
+                                        id="id_pegawai" 
+                                        name="id_pegawai" 
+                                        placeholder="MBI-XXXX" 
+                                        type="text"
+                                        value={username}
+                                        onChange={(e) => setUsername(e.target.value)}
+                                    />
                                 </div>
 
-                                {/* Sandi Field */}
                                 <div className="flex flex-col gap-2">
                                     <div className="flex justify-between items-end">
                                         <label className="font-label text-xs font-semibold uppercase tracking-widest text-[#43474f] flex items-center gap-2" htmlFor="sandi">
@@ -134,29 +132,20 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
                                         </label>
                                         <a className="text-[10px] font-bold text-[#006875] uppercase tracking-wider hover:underline" href="#">Lupa Sandi?</a>
                                     </div>
-                                    <div className="relative group">
-                                        <input 
-                                            className="w-full bg-[#e6e8ea] border-none rounded-lg px-4 py-3.5 text-[#001e40] font-medium focus:ring-2 focus:ring-[#006875]/20 focus:bg-[#ffffff] transition-all duration-300 placeholder:text-[#737780]/50 outline-none" 
-                                            id="sandi" 
-                                            name="sandi" 
-                                            placeholder="••••••••" 
-                                            type="password"
-                                            value={password}
-                                            onChange={(e) => setPassword(e.target.value)}
-                                        />
-                                    </div>
+                                    <input 
+                                        className="w-full bg-[#e6e8ea] border-none rounded-lg px-4 py-3.5 text-[#001e40] font-medium focus:ring-2 focus:ring-[#006875]/20 focus:bg-[#ffffff] transition-all duration-300 placeholder:text-[#737780]/50 outline-none" 
+                                        id="sandi" 
+                                        name="sandi" 
+                                        placeholder="••••••••" 
+                                        type="password"
+                                        value={password}
+                                        onChange={(e) => setPassword(e.target.value)}
+                                    />
                                 </div>
                             </div>
 
-                            {/* Remember Me Toggle */}
-                            <div className="flex items-center gap-3">
-                                <input className="w-4 h-4 rounded border-[#c3c6d1] text-[#006875] focus:ring-[#006875]" id="remember" type="checkbox" />
-                                <label className="text-xs text-[#43474f] font-medium" htmlFor="remember">Ingat saya di perangkat ini</label>
-                            </div>
-
-                            {/* Submit Button */}
                             <button 
-                                className="group relative flex items-center justify-center w-full bg-[#001e40] text-[#ffffff] font-headline font-bold text-sm py-4 rounded-lg transition-all duration-300 hover:bg-[#003366] shadow-lg active:scale-[0.98] disabled:opacity-70 disabled:cursor-not-allowed" 
+                                className="group relative flex items-center justify-center w-full bg-[#001e40] text-[#ffffff] font-headline font-bold text-sm py-4 rounded-lg transition-all duration-300 hover:bg-[#003366] shadow-lg active:scale-[0.98] disabled:opacity-70 disabled:cursor-not-allowed mt-2" 
                                 type="submit"
                                 disabled={loading || !username || !password}
                             >
@@ -170,25 +159,96 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
                                 </span>
                             </button>
                         </form>
-
-                        {/* System Status / Security Note */}
-                        <div className="pt-4 border-t border-[#c3c6d1]/15 flex items-center gap-3">
-                            <div className="w-2 h-2 rounded-full bg-[#00daf3] animate-pulse"></div>
-                            <span className="text-[10px] text-[#8c9cb5] font-medium uppercase tracking-tighter">Sistem Terenkripsi AES-256 Aktif</span>
-                        </div>
                     </div>
 
-                    {/* Secondary Information Grid */}
-                    <div className="mt-8 grid grid-cols-2 gap-4">
-                        <div className="bg-white/5 backdrop-blur-md p-4 rounded-lg border border-white/5">
-                            <span className="material-symbols-outlined text-[#00daf3] mb-2">security</span>
-                            <h3 className="text-white text-xs font-bold uppercase tracking-widest">Akses Aman</h3>
-                            <p className="text-white/60 text-[10px] mt-1">Multi-factor authentication didukung untuk verifikasi lanjutan.</p>
+                    {/* Sign Up / Request Access Form (Right Panel) */}
+                    <div className={`absolute top-0 left-0 h-full w-1/2 transition-all duration-700 ease-in-out flex flex-col justify-center px-12 ${isRightPanelActive ? 'translate-x-[100%] opacity-100 z-20' : 'translate-x-[100%] opacity-0 z-10'}`}>
+                        <div className="flex flex-col gap-2 mb-8">
+                            <h1 className="text-3xl font-headline font-extrabold text-[#001e40] tracking-tight leading-none">Minta Akses</h1>
+                            <p className="text-[#43474f] text-sm font-medium">Daftarkan diri Anda ke Administrator IT.</p>
                         </div>
-                        <div className="bg-white/5 backdrop-blur-md p-4 rounded-lg border border-white/5">
-                            <span className="material-symbols-outlined text-[#00daf3] mb-2">inventory_2</span>
-                            <h3 className="text-white text-xs font-bold uppercase tracking-widest">Real-time Data</h3>
-                            <p className="text-white/60 text-[10px] mt-1">Sinkronisasi stok obat dan peralatan medis secara instan.</p>
+
+                        <form onSubmit={handleRequestAccess} className="flex flex-col gap-5">
+                            <div className="flex flex-col gap-4">
+                                <div className="flex flex-col gap-2">
+                                    <label className="font-label text-xs font-semibold uppercase tracking-widest text-[#43474f] flex items-center gap-2">NAMA LENGKAP</label>
+                                    <input 
+                                        className="w-full bg-[#e6e8ea] border-none rounded-lg px-4 py-3.5 text-[#001e40] font-medium focus:ring-2 focus:ring-[#006875]/20 focus:bg-[#ffffff] transition-all duration-300 placeholder:text-[#737780]/50 outline-none" 
+                                        placeholder="Nama Anda" 
+                                        type="text"
+                                        required
+                                    />
+                                </div>
+                                <div className="flex flex-col gap-2">
+                                    <label className="font-label text-xs font-semibold uppercase tracking-widest text-[#43474f] flex items-center gap-2">ID PEGAWAI</label>
+                                    <input 
+                                        className="w-full bg-[#e6e8ea] border-none rounded-lg px-4 py-3.5 text-[#001e40] font-medium focus:ring-2 focus:ring-[#006875]/20 focus:bg-[#ffffff] transition-all duration-300 placeholder:text-[#737780]/50 outline-none" 
+                                        placeholder="MBI-XXXX" 
+                                        type="text"
+                                        required
+                                    />
+                                </div>
+                                <div className="flex flex-col gap-2">
+                                    <label className="font-label text-xs font-semibold uppercase tracking-widest text-[#43474f] flex items-center gap-2">DEPARTEMEN</label>
+                                    <input 
+                                        className="w-full bg-[#e6e8ea] border-none rounded-lg px-4 py-3.5 text-[#001e40] font-medium focus:ring-2 focus:ring-[#006875]/20 focus:bg-[#ffffff] transition-all duration-300 placeholder:text-[#737780]/50 outline-none" 
+                                        placeholder="Gudang / Farmasi" 
+                                        type="text"
+                                        required
+                                    />
+                                </div>
+                            </div>
+
+                            <button 
+                                className="group relative flex items-center justify-center w-full bg-[#006875] text-[#ffffff] font-headline font-bold text-sm py-4 rounded-lg transition-all duration-300 hover:bg-[#004d57] shadow-lg active:scale-[0.98] mt-2" 
+                                type="submit"
+                            >
+                                <span className="flex items-center gap-2">
+                                    Kirim Permintaan <span className="material-symbols-outlined text-base">send</span>
+                                </span>
+                            </button>
+                        </form>
+                    </div>
+
+                    {/* Overlay Container */}
+                    <div className={`absolute top-0 left-1/2 w-1/2 h-full overflow-hidden transition-transform duration-700 ease-in-out z-[100] ${isRightPanelActive ? '-translate-x-full' : 'translate-x-0'}`}>
+                        <div className={`bg-[#001e40] relative -left-full h-full w-[200%] transform transition-transform duration-700 ease-in-out ${isRightPanelActive ? 'translate-x-1/2' : 'translate-x-0'}`}
+                            style={{
+                                background: 'linear-gradient(135deg, #006875 0%, #001e40 100%)',
+                                backgroundRepeat: 'no-repeat',
+                                backgroundSize: 'cover',
+                                backgroundPosition: '0 0'
+                            }}>
+                            
+                            {/* Overlay Left (Visible when right panel active) */}
+                            <div className={`absolute flex flex-col items-center justify-center px-12 text-center top-0 h-full w-1/2 transform transition-transform duration-700 ease-in-out ${isRightPanelActive ? 'translate-x-0' : '-translate-x-[20%]'}`}>
+                                <Logo size={64} className="mb-6 opacity-80" />
+                                <h1 className="text-4xl font-headline font-extrabold text-white mb-4 tracking-tight">Sudah Punya Akun?</h1>
+                                <p className="text-white/80 mb-8 font-medium text-sm leading-relaxed">
+                                    Silakan masuk menggunakan ID Pegawai dan Sandi Anda untuk mengakses sistem Stock Opname.
+                                </p>
+                                <button 
+                                    onClick={() => setIsRightPanelActive(false)} 
+                                    className="border-2 border-white/50 text-white px-10 py-3 rounded-lg font-bold uppercase tracking-widest hover:bg-white hover:text-[#001e40] transition-all duration-300"
+                                >
+                                    Masuk
+                                </button>
+                            </div>
+
+                            {/* Overlay Right (Visible when left panel active) */}
+                            <div className={`absolute right-0 flex flex-col items-center justify-center px-12 text-center top-0 h-full w-1/2 transform transition-transform duration-700 ease-in-out ${isRightPanelActive ? 'translate-x-[20%]' : 'translate-x-0'}`}>
+                                <Logo size={64} className="mb-6 opacity-80" />
+                                <h1 className="text-4xl font-headline font-extrabold text-white mb-4 tracking-tight">Belum Punya Akses?</h1>
+                                <p className="text-white/80 mb-8 font-medium text-sm leading-relaxed">
+                                    Hubungi Administrator IT atau kirim permintaan akses untuk menggunakan sistem Stock Opname.
+                                </p>
+                                <button 
+                                    onClick={() => setIsRightPanelActive(true)} 
+                                    className="border-2 border-white/50 text-white px-10 py-3 rounded-lg font-bold uppercase tracking-widest hover:bg-white hover:text-[#001e40] transition-all duration-300"
+                                >
+                                    Minta Akses
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -220,3 +280,4 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
         </div>
     );
 };
+
