@@ -121,20 +121,58 @@ const App: React.FC = () => {
   }
 
   // 3. Main App
+  const navItems = [
+    { id: AppView.DASHBOARD, icon: Home, label: 'Beranda' },
+    { id: AppView.FORM, icon: ClipboardList, label: 'Audit Fisik' },
+    { id: AppView.MASTER_DATA, icon: Database, label: 'Database' },
+    { id: AppView.ACTIVITIES, icon: Activity, label: 'Aktivitas' },
+  ];
+  const activeIndex = navItems.findIndex(item => item.id === view);
+
   return (
     <div className="min-h-screen bg-[#f6f6f8] relative">
-        <div className="fixed bottom-[calc(4.5rem+env(safe-area-inset-bottom))] left-0 right-0 z-[120] pointer-events-none flex flex-col items-center justify-center opacity-80 select-none transition-all">
+        <style>{`
+            .magic-indicator {
+                position: absolute;
+                top: -24px;
+                width: 64px;
+                height: 64px;
+                background-color: #00A3FF;
+                border-radius: 50%;
+                border: 6px solid #f6f6f8;
+                transition: left 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+                z-index: 0;
+            }
+            .magic-indicator::before {
+                content: '';
+                position: absolute;
+                top: 50%;
+                left: -22px;
+                width: 20px;
+                height: 20px;
+                background: transparent;
+                border-top-right-radius: 20px;
+                box-shadow: 1px -10px 0 0 #f6f6f8;
+            }
+            .magic-indicator::after {
+                content: '';
+                position: absolute;
+                top: 50%;
+                right: -22px;
+                width: 20px;
+                height: 20px;
+                background: transparent;
+                border-top-left-radius: 20px;
+                box-shadow: -1px -10px 0 0 #f6f6f8;
+            }
+        `}</style>
+        <div className="fixed top-4 right-4 z-[200] pointer-events-none flex flex-col items-end justify-center opacity-90 select-none transition-all">
              {/* Network Status Indicator */}
-             <div className={`flex items-center gap-1.5 mb-1 px-2 py-0.5 rounded-full backdrop-blur-sm ${isOnline ? 'bg-emerald-500/10' : 'bg-red-500/10'}`}>
+             <div className={`flex items-center gap-1.5 px-3 py-1 rounded-full backdrop-blur-md shadow-sm border ${isOnline ? 'bg-emerald-50/90 border-emerald-200/50 dark:bg-emerald-900/30 dark:border-emerald-800/50' : 'bg-red-50/90 border-red-200/50 dark:bg-red-900/30 dark:border-red-800/50'}`}>
                 <div className={`w-1.5 h-1.5 rounded-full ${isOnline ? 'bg-emerald-500 shadow-[0_0_5px_rgba(16,185,129,0.5)]' : 'bg-red-500 shadow-[0_0_5px_rgba(239,68,68,0.5)]'}`}></div>
-                <span className={`text-[8px] font-bold uppercase tracking-widest ${isOnline ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500'}`}>
+                <span className={`text-[9px] font-bold uppercase tracking-widest ${isOnline ? 'text-emerald-700 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
                     {isOnline ? 'System Online' : 'Offline Mode'}
                 </span>
-             </div>
-             
-             <div className="opacity-40 flex flex-col items-center">
-                 <span className="text-[8px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest drop-shadow-sm leading-tight">Version Beta</span>
-                 <span className="text-[7px] font-bold text-slate-400 dark:text-slate-500 italic leading-tight">powered by Satria JM</span>
              </div>
         </div>
 
@@ -186,35 +224,35 @@ const App: React.FC = () => {
         </div>
 
         {/* Bottom Navigation Bar */}
-        <div className="fixed bottom-0 left-0 right-0 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 shadow-[0_-4px_20px_rgba(0,0,0,0.05)] dark:shadow-[0_-4px_20px_rgba(0,0,0,0.2)] z-[130] px-6 py-3 flex justify-around items-center pb-[calc(0.75rem+env(safe-area-inset-bottom))]">
-            <button 
-                onClick={() => navigate(AppView.DASHBOARD)}
-                className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all ${view === AppView.DASHBOARD ? 'text-primary scale-110' : 'text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'}`}
-            >
-                <Home size={24} strokeWidth={view === AppView.DASHBOARD ? 2.5 : 2} />
-                <span className="text-[10px] font-bold">Beranda</span>
-            </button>
-            <button 
-                onClick={() => navigate(AppView.FORM)}
-                className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all ${view === AppView.FORM ? 'text-primary scale-110' : 'text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'}`}
-            >
-                <ClipboardList size={24} strokeWidth={view === AppView.FORM ? 2.5 : 2} />
-                <span className="text-[10px] font-bold">Audit Fisik</span>
-            </button>
-            <button 
-                onClick={() => navigate(AppView.MASTER_DATA)}
-                className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all ${view === AppView.MASTER_DATA ? 'text-primary scale-110' : 'text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'}`}
-            >
-                <Database size={24} strokeWidth={view === AppView.MASTER_DATA ? 2.5 : 2} />
-                <span className="text-[10px] font-bold">Database</span>
-            </button>
-            <button 
-                onClick={() => navigate(AppView.ACTIVITIES)}
-                className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all ${view === AppView.ACTIVITIES ? 'text-primary scale-110' : 'text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'}`}
-            >
-                <Activity size={24} strokeWidth={view === AppView.ACTIVITIES ? 2.5 : 2} />
-                <span className="text-[10px] font-bold">Aktivitas</span>
-            </button>
+        <div className="fixed bottom-0 left-0 right-0 bg-white dark:bg-slate-900 shadow-[0_-4px_20px_rgba(0,0,0,0.05)] dark:shadow-[0_-4px_20px_rgba(0,0,0,0.2)] z-[130] pb-[env(safe-area-inset-bottom)]">
+            <div className="relative flex w-full h-[72px]">
+                {/* Magic Indicator */}
+                <div 
+                    className="magic-indicator"
+                    style={{ 
+                        left: `calc(${activeIndex * 25}% + 12.5% - 32px)`,
+                    }}
+                ></div>
+
+                {navItems.map((item) => {
+                    const isActive = view === item.id;
+                    const Icon = item.icon;
+                    return (
+                        <button 
+                            key={item.id}
+                            onClick={() => navigate(item.id)}
+                            className="relative flex-1 flex flex-col items-center justify-center z-10 h-full cursor-pointer"
+                        >
+                            <div className={`transition-transform duration-500 ease-in-out ${isActive ? '-translate-y-[22px] text-white' : 'translate-y-2 text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300'}`}>
+                                <Icon size={24} strokeWidth={isActive ? 2.5 : 2} />
+                            </div>
+                            <span className={`absolute bottom-3 text-[10px] font-bold transition-all duration-500 ease-in-out ${isActive ? 'opacity-100 translate-y-0 text-primary' : 'opacity-0 translate-y-4'}`}>
+                                {item.label}
+                            </span>
+                        </button>
+                    );
+                })}
+            </div>
         </div>
     </div>
   );
