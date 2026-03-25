@@ -17,6 +17,10 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
     
     // State for sliding panel animation
     const [isRightPanelActive, setIsRightPanelActive] = useState(false);
+    
+    // State for request access form
+    const [requestName, setRequestName] = useState('');
+    const [requestDept, setRequestDept] = useState('');
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -50,7 +54,14 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
 
     const handleRequestAccess = (e: React.FormEvent) => {
         e.preventDefault();
-        alert("Permintaan akses telah dikirim ke Administrator IT.");
+        const message = `Halo Administrator IT,\n\nSaya ingin meminta akses untuk sistem Stock Opname.\n\nNama Lengkap: ${requestName}\nDepartemen: ${requestDept}\n\nTerima kasih.`;
+        const encodedMessage = encodeURIComponent(message);
+        const waUrl = `https://api.whatsapp.com/send/?phone=6285283510952&text=${encodedMessage}&type=phone_number&app_absent=0&wame_ctl=1`;
+        
+        window.open(waUrl, '_blank');
+        
+        setRequestName('');
+        setRequestDept('');
         setIsRightPanelActive(false);
     };
 
@@ -176,15 +187,8 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
                                         className="w-full bg-[#e6e8ea] border-none rounded-lg px-4 py-3.5 text-[#001e40] font-medium focus:ring-2 focus:ring-[#006875]/20 focus:bg-[#ffffff] transition-all duration-300 placeholder:text-[#737780]/50 outline-none" 
                                         placeholder="Nama Anda" 
                                         type="text"
-                                        required
-                                    />
-                                </div>
-                                <div className="flex flex-col gap-2">
-                                    <label className="font-label text-xs font-semibold uppercase tracking-widest text-[#43474f] flex items-center gap-2">ID PEGAWAI</label>
-                                    <input 
-                                        className="w-full bg-[#e6e8ea] border-none rounded-lg px-4 py-3.5 text-[#001e40] font-medium focus:ring-2 focus:ring-[#006875]/20 focus:bg-[#ffffff] transition-all duration-300 placeholder:text-[#737780]/50 outline-none" 
-                                        placeholder="MBI-XXXX" 
-                                        type="text"
+                                        value={requestName}
+                                        onChange={(e) => setRequestName(e.target.value)}
                                         required
                                     />
                                 </div>
@@ -194,6 +198,8 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
                                         className="w-full bg-[#e6e8ea] border-none rounded-lg px-4 py-3.5 text-[#001e40] font-medium focus:ring-2 focus:ring-[#006875]/20 focus:bg-[#ffffff] transition-all duration-300 placeholder:text-[#737780]/50 outline-none" 
                                         placeholder="Gudang / Farmasi" 
                                         type="text"
+                                        value={requestDept}
+                                        onChange={(e) => setRequestDept(e.target.value)}
                                         required
                                     />
                                 </div>

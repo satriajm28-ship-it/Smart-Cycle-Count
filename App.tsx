@@ -24,7 +24,6 @@ const App: React.FC = () => {
   
   // Authentication State
   const [isFirebaseConnected, setIsFirebaseConnected] = useState(false);
-  const [authError, setAuthError] = useState<string | null>(null);
   const [currentUser, setCurrentUser] = useState<AppUser | null>(null);
   
   const [isOnline, setIsOnline] = useState(navigator.onLine);
@@ -56,21 +55,14 @@ const App: React.FC = () => {
       if (user) {
         if (mounted) {
             setIsFirebaseConnected(true);
-            setAuthError(null);
             // Bootstrap users once connected
             bootstrapUsers();
         }
       } else {
         signInAnonymously(auth)
             .catch((error: any) => {
-                // auth/admin-restricted-operation usually means Anonymous Auth is disabled in Firebase Console
                 console.warn("Firebase Auth background connection skipped:", error.code);
                 if (mounted) {
-                    if (error.code === 'auth/admin-restricted-operation') {
-                        setAuthError("Anonymous Authentication is disabled. Please enable it in Firebase Console -> Authentication -> Sign-in method.");
-                    } else {
-                        setAuthError(error.message);
-                    }
                     setIsFirebaseConnected(true); 
                     // Bootstrap users anyway in public mode
                     bootstrapUsers();
@@ -125,25 +117,7 @@ const App: React.FC = () => {
 
   // 2. Show Login Screen if not logged in locally
   if (!currentUser) {
-      return (
-          <>
-            {authError && (
-                <div className="fixed top-0 left-0 right-0 z-[200] bg-amber-600 text-white p-3 text-center text-xs font-bold flex items-center justify-between gap-4 shadow-lg">
-                    <div className="flex items-center gap-2">
-                        <span className="material-symbols-outlined text-sm">warning</span>
-                        <span>{authError}</span>
-                    </div>
-                    <button 
-                        onClick={() => setAuthError(null)}
-                        className="bg-white/20 hover:bg-white/30 px-2 py-1 rounded text-[10px] uppercase transition-colors"
-                    >
-                        Dismiss
-                    </button>
-                </div>
-            )}
-            <Login onLoginSuccess={handleLoginSuccess} />
-          </>
-      );
+      return <Login onLoginSuccess={handleLoginSuccess} />;
   }
 
   // 3. Main App
