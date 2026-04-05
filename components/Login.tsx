@@ -80,9 +80,21 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
 
             {/* Main Content */}
             <main className="flex-grow flex items-center justify-center relative w-full h-full">
+                <style>{`
+                    .light-beam {
+                        background: linear-gradient(180deg, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0.02) 50%, transparent 100%);
+                        clip-path: polygon(35% 0, 65% 0, 100% 100%, 0 100%);
+                    }
+                    @media (min-width: 640px) {
+                        .light-beam {
+                            background: linear-gradient(90deg, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0.02) 50%, transparent 100%);
+                            clip-path: polygon(0 43%, 100% 0, 100% 100%, 0 57%);
+                        }
+                    }
+                `}</style>
                 
                 {/* Lamp Container */}
-                <div className="absolute left-[10%] md:left-[20%] top-1/2 -translate-y-1/2 flex flex-col items-center z-20">
+                <div className="absolute top-16 left-1/2 -translate-x-1/2 sm:left-[10%] md:left-[20%] sm:top-1/2 sm:-translate-y-1/2 sm:translate-x-0 flex flex-col items-center z-20 scale-[0.6] sm:scale-100 origin-top sm:origin-left transition-all duration-700">
                     {/* Lamp Shade */}
                     <div className={`w-32 h-24 transition-colors duration-300 relative z-10 ${isLampOn ? 'bg-[#fef08a]' : 'bg-[#2a303c]'}`} 
                          style={{ clipPath: 'polygon(25% 0, 75% 0, 100% 100%, 0 100%)' }}>
@@ -106,18 +118,16 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
                     </div>
                     
                     {/* Light Beam */}
-                    <div className={`absolute top-[96px] left-1/2 w-[150vw] h-[1000px] -translate-y-1/2 pointer-events-none transition-opacity duration-700 origin-left ${isLampOn ? 'opacity-100' : 'opacity-0'}`}
-                         style={{ 
-                             background: 'linear-gradient(90deg, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0.02) 50%, transparent 100%)',
-                             clipPath: 'polygon(0 43%, 100% 0, 100% 100%, 0 57%)'
-                         }}>
-                    </div>
+                    <div className={`absolute pointer-events-none transition-opacity duration-700 light-beam ${isLampOn ? 'opacity-100' : 'opacity-0'}
+                        top-[96px] left-1/2 -translate-x-1/2 w-[1000px] h-[150vh] origin-top
+                        sm:top-[96px] sm:left-1/2 sm:translate-x-0 sm:w-[150vw] sm:h-[1000px] sm:-translate-y-1/2 sm:origin-left
+                    `}></div>
                 </div>
 
                 {/* Form Container */}
-                <div className={`absolute left-[50%] md:left-[45%] top-1/2 -translate-y-1/2 w-full max-w-md transition-all duration-1000 z-30 ${isLampOn ? 'opacity-100 translate-x-0' : 'opacity-0 translate-x-12 pointer-events-none'}`}>
+                <div className={`relative w-[90%] sm:w-full max-w-[360px] sm:max-w-md transition-all duration-1000 z-30 sm:ml-[20%] md:ml-[10%] mt-56 sm:mt-0 ${isLampOn ? 'opacity-100 translate-y-0 sm:translate-x-0' : 'opacity-0 translate-y-12 sm:translate-y-0 sm:translate-x-12 pointer-events-none'}`}>
                     
-                    <div className="bg-[#1e232d]/80 backdrop-blur-xl p-8 rounded-2xl shadow-2xl border border-white/10 relative overflow-hidden">
+                    <div className="bg-[#1e232d]/80 backdrop-blur-xl p-6 sm:p-8 rounded-2xl shadow-2xl border border-white/10 relative overflow-hidden">
                         {/* Glow effect behind form */}
                         <div className="absolute -inset-4 bg-white/5 blur-2xl -z-10 rounded-full"></div>
 
