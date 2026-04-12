@@ -6,7 +6,6 @@ import { Dashboard } from './components/Dashboard';
 import { MasterData } from './components/MasterData';
 import { ActivityLogs } from './components/ActivityLogs';
 import { DamagedReport } from './components/DamagedReport';
-import { WMSIntegration } from './components/WMSIntegration';
 import { UserManagement } from './components/UserManagement';
 import { Logo } from './components/Logo';
 import { Login } from './components/Login'; // Import Login
@@ -207,12 +206,6 @@ const App: React.FC = () => {
             {view === AppView.MASTER_DATA && (
                 <div className="p-4 md:p-8 animate-fade-in relative">
                     <MasterData currentUser={currentUser} />
-                </div>
-            )}
-
-            {view === AppView.WMS_INTEGRATION && (
-                <div className="p-4 md:p-8 animate-fade-in relative">
-                    <WMSIntegration />
                 </div>
             )}
 

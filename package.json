@@ -4,10 +4,9 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "dev": "tsx server.ts",
+    "dev": "vite",
     "build": "tsc && vite build",
     "lint": "tsc --noEmit",
-    "start": "node server.ts",
     "preview": "vite preview"
   },
   "dependencies": {

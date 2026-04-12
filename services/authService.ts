@@ -70,18 +70,19 @@ export const deleteUser = async (username: string) => {
 // Bootstrap users if the collection is empty
 export const bootstrapUsers = async () => {
     try {
+        // Always ensure admin exists to prevent lockout
+        const adminUser = { username: 'admin', password: 'admin123', role: 'admin', name: 'Administrator' };
+        await setDoc(doc(db, 'users', 'admin'), adminUser, { merge: true });
+
         const usersSnap = await getDocs(collection(db, 'users'));
-        if (usersSnap.empty) {
+        if (usersSnap.size <= 1) { // Only admin or empty
             console.log("Bootstrapping users to Firestore...");
-            const users = [
-                { username: 'admin', password: 'admin123', role: 'admin', name: 'Administrator' },
-                ...Array.from({ length: 20 }, (_, i) => ({
-                    username: `User${i + 1}`,
-                    password: `User${i + 1}`,
-                    role: 'user',
-                    name: `Staff ${i + 1}`
-                }))
-            ];
+            const users = Array.from({ length: 20 }, (_, i) => ({
+                username: `User${i + 1}`,
+                password: `User${i + 1}`,
+                role: 'user',
+                name: `Staff ${i + 1}`
+            }));
             for (const user of users) {
                 await setDoc(doc(db, 'users', user.username), user);
             }
