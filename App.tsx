@@ -8,21 +8,18 @@ import { ActivityLogs } from './components/ActivityLogs';
 import { DamagedReport } from './components/DamagedReport';
 import { UserManagement } from './components/UserManagement';
 import { Logo } from './components/Logo';
-import { Login } from './components/Login'; // Import Login
-import { auth } from './services/firebaseConfig';
-import * as firebaseAuth from 'firebase/auth';
+import { Login } from './components/Login';
 import { setPermissionErrorHandler } from './services/storageService';
 import { Home, ClipboardList, Database, Activity } from 'lucide-react';
 import { getSessionUser, clearSessionUser, bootstrapUsers } from './services/authService';
-
-const { onAuthStateChanged, signInAnonymously } = firebaseAuth as any;
+import { supabase } from './services/supabaseClient';
 
 const App: React.FC = () => {
   const [view, setView] = useState<AppView>(AppView.DASHBOARD);
   const [navParams, setNavParams] = useState<any>(null);
   
   // Authentication State
-  const [isFirebaseConnected, setIsFirebaseConnected] = useState(false);
+  const [isDbConnected, setIsDbConnected] = useState(false);
   const [currentUser, setCurrentUser] = useState<AppUser | null>(null);
   
   const [isOnline, setIsOnline] = useState(navigator.onLine);
@@ -49,32 +46,30 @@ const App: React.FC = () => {
         }
     });
 
-    // 4. Firebase Anonymous Auth (Background)
-    const unsubscribe = onAuthStateChanged(auth, (user: any) => {
-      if (user) {
-        if (mounted) {
-            setIsFirebaseConnected(true);
-            // Bootstrap users once connected
-            bootstrapUsers();
+    // 4. Supabase Connection & Bootstrap
+    const initDb = async () => {
+        try {
+            // Simple query to check connection
+            await supabase.from('users').select('username').limit(1);
+            if (mounted) {
+                setIsDbConnected(true);
+                bootstrapUsers();
+            }
+        } catch (error) {
+            console.warn("Supabase connection issue:", error);
+            if (mounted) {
+                setIsDbConnected(true); // Proceed anyway to allow offline/local usage
+                bootstrapUsers();
+            }
         }
-      } else {
-        signInAnonymously(auth)
-            .catch((error: any) => {
-                console.warn("Firebase Auth background connection skipped:", error.code);
-                if (mounted) {
-                    setIsFirebaseConnected(true); 
-                    // Bootstrap users anyway in public mode
-                    bootstrapUsers();
-                }
-            });
-      }
-    });
+    };
+    
+    initDb();
 
     return () => {
         mounted = false;
         window.removeEventListener('online', handleOnline);
         window.removeEventListener('offline', handleOffline);
-        unsubscribe();
     };
   }, []);
 
@@ -91,12 +86,10 @@ const App: React.FC = () => {
   const handleLogout = () => {
       clearSessionUser();
       setCurrentUser(null);
-      // Optional: also sign out of Firebase if strict rule enforcement needed, 
-      // but usually keeping anon auth active for next login is faster.
   };
 
-  // 1. Show Splash/Loading if Firebase connecting
-  if (!isFirebaseConnected) {
+  // 1. Show Splash/Loading if DB connecting
+  if (!isDbConnected) {
     return (
         <div className="flex flex-col items-center justify-center min-h-screen bg-[#050A18] text-white gap-8">
             <div className="relative animate-pulse">

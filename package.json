@@ -11,9 +11,9 @@
   },
   "dependencies": {
     "@google/genai": "latest",
+    "@supabase/supabase-js": "^2.103.0",
     "cors": "^2.8.6",
     "express": "^5.2.1",
-    "firebase": "^10.8.1",
     "html5-qrcode": "^2.3.8",
     "lucide-react": "^0.344.0",
     "react": "^18.3.1",

@@ -91,7 +91,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ onBack }) => {
                     </button>
                     <div>
                         <h1 className="text-2xl font-black text-slate-800 uppercase tracking-tight">Manajemen User</h1>
-                        <p className="text-xs text-slate-400 font-bold uppercase tracking-widest">Kelola Akses Pegawai di Firebase</p>
+                        <p className="text-xs text-slate-400 font-bold uppercase tracking-widest">Kelola Akses Pegawai di Supabase</p>
                     </div>
                 </div>
                 <button 
@@ -117,7 +117,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ onBack }) => {
             {loading ? (
                 <div className="flex flex-col items-center justify-center py-24 opacity-30">
                     <RefreshCw className="animate-spin mb-4" size={40} />
-                    <p className="font-bold uppercase tracking-widest text-xs">Menghubungkan ke Firebase...</p>
+                    <p className="font-bold uppercase tracking-widest text-xs">Menghubungkan ke Supabase...</p>
                 </div>
             ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -213,7 +213,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ onBack }) => {
                             <div className="flex gap-4 pt-4">
                                 <button type="button" onClick={() => setIsEditing(false)} className="flex-1 py-3.5 text-slate-500 font-bold text-sm hover:bg-slate-100 rounded-xl transition-colors">Batal</button>
                                 <button type="submit" className="flex-[2] py-3.5 bg-primary text-white font-bold rounded-xl text-sm shadow-xl shadow-primary/25 flex items-center justify-center gap-2 active:scale-[0.98] transition-all">
-                                    <Save size={18} /> Simpan ke Firebase
+                                    <Save size={18} /> Simpan ke Supabase
                                 </button>
                             </div>
                         </form>

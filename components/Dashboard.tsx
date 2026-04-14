@@ -433,7 +433,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, currentUser, o
                                     onClick={() => { onNavigate(AppView.USER_MANAGEMENT); setShowAdminMenu(false); }}
                                     className="w-full px-4 py-2.5 text-left text-sm font-bold text-slate-600 hover:bg-slate-50 flex items-center gap-3 transition-colors"
                                 >
-                                    <User size={16} /> User Management (Firebase)
+                                    <User size={16} /> User Management (Supabase)
                                 </button>
                                 <button 
                                     onClick={() => { handleRestoreData(); setShowAdminMenu(false); }}

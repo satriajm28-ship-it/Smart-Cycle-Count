@@ -1,23 +1,29 @@
 
 import { AppUser } from "../types";
-import { db } from "./firebaseConfig";
-import { doc, getDoc, setDoc, collection, getDocs, deleteDoc } from "firebase/firestore";
+import { supabase } from "./supabaseClient";
 
 const STORAGE_KEY = 'app_session_user';
 
-// Authenticate user against Firestore
+// Authenticate user against Supabase
 export const authenticateUser = async (username: string, password: string): Promise<AppUser | null> => {
     try {
-        const userDoc = await getDoc(doc(db, 'users', username));
-        if (userDoc.exists()) {
-            const data = userDoc.data();
-            if (data.password === password) {
-                return {
-                    username: data.username,
-                    role: data.role,
-                    name: data.name
-                };
-            }
+        const { data, error } = await supabase
+            .from('users')
+            .select('*')
+            .eq('username', username)
+            .single();
+
+        if (error) {
+            console.error("Auth query error:", error);
+            return null;
+        }
+
+        if (data && data.password === password) {
+            return {
+                username: data.username,
+                role: data.role,
+                name: data.name
+            };
         }
         return null;
     } catch (e) {
@@ -26,29 +32,29 @@ export const authenticateUser = async (username: string, password: string): Prom
     }
 };
 
-// Get all users from Firestore
+// Get all users from Supabase
 export const getAllUsers = async (): Promise<AppUser[]> => {
     try {
-        const usersSnap = await getDocs(collection(db, 'users'));
-        return usersSnap.docs.map(doc => {
-            const data = doc.data();
-            return {
-                username: data.username,
-                role: data.role,
-                name: data.name,
-                password: data.password // We include password for management purposes
-            } as any;
-        });
+        const { data, error } = await supabase.from('users').select('*');
+        if (error) throw error;
+        
+        return (data || []).map(user => ({
+            username: user.username,
+            role: user.role,
+            name: user.name,
+            password: user.password // Included for management purposes
+        } as any));
     } catch (e) {
         console.error("Failed to fetch users:", e);
         return [];
     }
 };
 
-// Save or update a user in Firestore
+// Save or update a user in Supabase
 export const saveUser = async (user: any) => {
     try {
-        await setDoc(doc(db, 'users', user.username), user, { merge: true });
+        const { error } = await supabase.from('users').upsert(user, { onConflict: 'username' });
+        if (error) throw error;
         return true;
     } catch (e) {
         console.error("Failed to save user:", e);
@@ -56,10 +62,11 @@ export const saveUser = async (user: any) => {
     }
 };
 
-// Delete a user from Firestore
+// Delete a user from Supabase
 export const deleteUser = async (username: string) => {
     try {
-        await deleteDoc(doc(db, 'users', username));
+        const { error } = await supabase.from('users').delete().eq('username', username);
+        if (error) throw error;
         return true;
     } catch (e) {
         console.error("Failed to delete user:", e);
@@ -67,25 +74,27 @@ export const deleteUser = async (username: string) => {
     }
 };
 
-// Bootstrap users if the collection is empty
+// Bootstrap users if the table is empty
 export const bootstrapUsers = async () => {
     try {
         // Always ensure admin exists to prevent lockout
         const adminUser = { username: 'admin', password: 'admin123', role: 'admin', name: 'Administrator' };
-        await setDoc(doc(db, 'users', 'admin'), adminUser, { merge: true });
+        await supabase.from('users').upsert(adminUser, { onConflict: 'username' });
 
-        const usersSnap = await getDocs(collection(db, 'users'));
-        if (usersSnap.size <= 1) { // Only admin or empty
-            console.log("Bootstrapping users to Firestore...");
+        const { data, error, count } = await supabase.from('users').select('*', { count: 'exact', head: true });
+        
+        if (count !== null && count <= 1) { // Only admin or empty
+            console.log("Bootstrapping users to Supabase...");
             const users = Array.from({ length: 20 }, (_, i) => ({
                 username: `User${i + 1}`,
                 password: `User${i + 1}`,
                 role: 'user',
                 name: `Staff ${i + 1}`
             }));
-            for (const user of users) {
-                await setDoc(doc(db, 'users', user.username), user);
-            }
+            
+            const { error: insertError } = await supabase.from('users').upsert(users, { onConflict: 'username' });
+            if (insertError) throw insertError;
+            
             console.log("Bootstrapping complete.");
         }
     } catch (e) {
