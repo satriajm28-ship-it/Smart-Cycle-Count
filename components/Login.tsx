@@ -31,22 +31,22 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
         setLoading(true);
 
         try {
-            const user = await authenticateUser(username, password);
-            if (user) {
-                setSessionUser(user);
+            const result = await authenticateUser(username, password);
+            if (result.user) {
+                setSessionUser(result.user);
                 
                 // Log login activity
                 saveActivityLog({
                     type: 'adjustment',
                     title: 'User Logged In',
-                    description: `${user.name} (${user.role}) has entered the system.`,
-                    user: user.name,
+                    description: `${result.user.name} (${result.user.role}) has entered the system.`,
+                    user: result.user.name,
                     details: `IP: ${window.location.hostname}`
                 }).catch(console.error);
 
-                onLoginSuccess(user);
+                onLoginSuccess(result.user);
             } else {
-                setError('Username atau Password salah.');
+                setError(result.error || 'Username atau Password salah.');
                 setLoading(false);
             }
         } catch (e) {

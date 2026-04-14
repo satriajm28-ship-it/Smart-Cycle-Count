@@ -5,7 +5,7 @@ import { supabase } from "./supabaseClient";
 const STORAGE_KEY = 'app_session_user';
 
 // Authenticate user against Supabase
-export const authenticateUser = async (username: string, password: string): Promise<AppUser | null> => {
+export const authenticateUser = async (username: string, password: string): Promise<{ user: AppUser | null, error: string | null }> => {
     try {
         const { data, error } = await supabase
             .from('users')
@@ -15,20 +15,33 @@ export const authenticateUser = async (username: string, password: string): Prom
 
         if (error) {
             console.error("Auth query error:", error);
-            return null;
+            // Check if it's a missing table error
+            if (error.code === '42P01') {
+                return { user: null, error: "Tabel 'users' belum dibuat di Supabase. Silakan jalankan script SQL." };
+            }
+            // Check if no rows returned
+            if (error.code === 'PGRST116') {
+                // Try to bootstrap admin user just in case
+                await bootstrapUsers();
+                return { user: null, error: "Username tidak ditemukan. Sistem sedang mencoba membuat ulang akun default, silakan coba login lagi dalam 3 detik." };
+            }
+            return { user: null, error: `Database Error (${error.code}): ${error.message}` };
         }
 
         if (data && data.password === password) {
             return {
-                username: data.username,
-                role: data.role,
-                name: data.name
+                user: {
+                    username: data.username,
+                    role: data.role,
+                    name: data.name
+                },
+                error: null
             };
         }
-        return null;
-    } catch (e) {
+        return { user: null, error: "Password salah." };
+    } catch (e: any) {
         console.error("Auth failed:", e);
-        return null;
+        return { user: null, error: e.message || "Terjadi kesalahan sistem." };
     }
 };
 
@@ -55,10 +68,10 @@ export const saveUser = async (user: any) => {
     try {
         const { error } = await supabase.from('users').upsert(user, { onConflict: 'username' });
         if (error) throw error;
-        return true;
-    } catch (e) {
+        return { success: true };
+    } catch (e: any) {
         console.error("Failed to save user:", e);
-        return false;
+        return { success: false, error: e.message || JSON.stringify(e) };
     }
 };
 
@@ -79,7 +92,11 @@ export const bootstrapUsers = async () => {
     try {
         // Always ensure admin exists to prevent lockout
         const adminUser = { username: 'admin', password: 'admin123', role: 'admin', name: 'Administrator' };
-        await supabase.from('users').upsert(adminUser, { onConflict: 'username' });
+        const { error: adminError } = await supabase.from('users').upsert(adminUser, { onConflict: 'username' });
+        
+        if (adminError) {
+            console.error("Failed to bootstrap admin user:", adminError);
+        }
 
         const { data, error, count } = await supabase.from('users').select('*', { count: 'exact', head: true });
         
@@ -93,9 +110,11 @@ export const bootstrapUsers = async () => {
             }));
             
             const { error: insertError } = await supabase.from('users').upsert(users, { onConflict: 'username' });
-            if (insertError) throw insertError;
-            
-            console.log("Bootstrapping complete.");
+            if (insertError) {
+                console.error("Failed to bootstrap staff users:", insertError);
+            } else {
+                console.log("Bootstrapping complete.");
+            }
         }
     } catch (e) {
         console.error("Bootstrap failed:", e);

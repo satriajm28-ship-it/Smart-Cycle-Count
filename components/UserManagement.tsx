@@ -68,12 +68,12 @@ export const UserManagement: React.FC<UserManagementProps> = ({ onBack }) => {
             return;
         }
 
-        const success = await saveUser(form);
-        if (success) {
+        const result = await saveUser(form);
+        if (result && result.success) {
             setIsEditing(false);
             fetchUsers();
         } else {
-            alert("Gagal menyimpan user.");
+            alert(`Gagal menyimpan user: ${result?.error || 'Unknown error'}`);
         }
     };
 
