@@ -5,12 +5,13 @@ import {
   subscribeToMasterData, 
   getMasterLocations, 
   subscribeToLocationStates,
+  subscribeToActivityLogs,
   deleteAuditLog,
   updateAuditLog,
   resetAllAuditData,
   restoreAuditData
 } from '../services/storageService';
-import { AuditRecord, AppView, MasterItem, LocationState, MasterLocation, AppUser } from '../types';
+import { AuditRecord, AppView, MasterItem, LocationState, MasterLocation, AppUser, ActivityLog } from '../types';
 import { Logo } from './Logo';
 import * as XLSX from 'xlsx';
 import { 
@@ -63,6 +64,11 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, currentUser, o
   // State for Reset/Restore Process
   const [isResetting, setIsResetting] = useState(false);
   const [isRestoring, setIsRestoring] = useState(false);
+  
+  // Notifications State
+  const [notifications, setNotifications] = useState<ActivityLog[]>([]);
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
   
   const [stats, setStats] = useState({
     totalAudited: 0,
@@ -185,12 +191,26 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, currentUser, o
         processDashboardData(); 
     }, handleListenerError);
 
+    const unsubActivities = subscribeToActivityLogs(data => {
+        setNotifications(prev => {
+            // If we already have notifications and new data comes in, increment unread
+            if (prev.length > 0 && data.length > prev.length) {
+                setUnreadCount(count => count + (data.length - prev.length));
+            } else if (prev.length === 0 && data.length > 0) {
+                // Initial load, maybe show 1 unread just to draw attention, or 0
+                setUnreadCount(1); 
+            }
+            return data.slice(0, 10);
+        });
+    }, handleListenerError);
+
     window.addEventListener('auditDataChanged', processDashboardData);
 
     return () => {
         unsubLogs();
         unsubMaster();
         unsubStates();
+        unsubActivities();
         window.removeEventListener('auditDataChanged', processDashboardData);
     };
   }, [processDashboardData]);
@@ -400,14 +420,83 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, currentUser, o
         </div>
 
         <div className="flex items-center gap-4">
-            <button className="p-2 text-slate-400 hover:text-primary hover:bg-slate-50 rounded-xl transition-all relative">
-                <span className="material-symbols-outlined text-[24px]">notifications</span>
-                <div className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full border-2 border-white"></div>
-            </button>
+            <div className="relative">
+                <button 
+                    onClick={() => {
+                        setShowNotifications(!showNotifications);
+                        setShowAdminMenu(false);
+                        if (!showNotifications) setUnreadCount(0); // Reset unread count when opening
+                    }}
+                    className={`p-2 rounded-xl transition-all relative ${showNotifications ? 'text-primary bg-slate-50' : 'text-slate-400 hover:text-primary hover:bg-slate-50'}`}
+                >
+                    <span className="material-symbols-outlined text-[24px]">notifications</span>
+                    {unreadCount > 0 && (
+                        <div className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full border-2 border-white"></div>
+                    )}
+                </button>
+
+                {showNotifications && (
+                    <div className="absolute right-0 mt-2 w-80 bg-white rounded-2xl shadow-2xl border border-slate-100 py-2 z-50 animate-in fade-in slide-in-from-top-2 max-h-[400px] flex flex-col">
+                        <div className="px-4 py-3 border-b border-slate-50 flex justify-between items-center bg-white sticky top-0 z-10">
+                            <p className="text-xs font-black text-slate-800 uppercase tracking-widest">Notifikasi</p>
+                            <button onClick={() => setShowNotifications(false)} className="text-slate-400 hover:text-slate-600">
+                                <X size={16} />
+                            </button>
+                        </div>
+                        <div className="overflow-y-auto flex-1 p-2 space-y-1">
+                            {notifications.length === 0 ? (
+                                <div className="py-8 text-center">
+                                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Belum ada notifikasi</p>
+                                </div>
+                            ) : (
+                                notifications.map(notif => (
+                                    <div key={notif.id} className="p-3 hover:bg-slate-50 rounded-xl transition-colors cursor-pointer border border-transparent hover:border-slate-100">
+                                        <div className="flex items-start gap-3">
+                                            <div className={`p-2 rounded-lg shrink-0 ${
+                                                notif.type === 'alert' ? 'bg-red-50 text-red-500' :
+                                                notif.type === 'scan' ? 'bg-blue-50 text-blue-500' :
+                                                notif.type === 'delete' ? 'bg-orange-50 text-orange-500' :
+                                                'bg-emerald-50 text-emerald-500'
+                                            }`}>
+                                                <span className="material-symbols-outlined text-[16px]">
+                                                    {notif.type === 'alert' ? 'warning' :
+                                                     notif.type === 'scan' ? 'qr_code_scanner' :
+                                                     notif.type === 'delete' ? 'delete' : 'info'}
+                                                </span>
+                                            </div>
+                                            <div>
+                                                <p className="text-xs font-bold text-slate-800 leading-tight">{notif.title}</p>
+                                                <p className="text-[10px] text-slate-500 mt-1 line-clamp-2 leading-relaxed">{notif.description}</p>
+                                                <p className="text-[9px] font-bold text-slate-400 mt-2 uppercase tracking-wider">
+                                                    {new Date(notif.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} • {notif.user}
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))
+                            )}
+                        </div>
+                        <div className="px-4 py-2 border-t border-slate-50 bg-slate-50/50 mt-auto">
+                            <button 
+                                onClick={() => {
+                                    onNavigate(AppView.ACTIVITIES);
+                                    setShowNotifications(false);
+                                }}
+                                className="w-full text-center text-[10px] font-black text-primary uppercase tracking-widest hover:text-[#1E3F6D] transition-colors py-1"
+                            >
+                                Lihat Semua Aktivitas
+                            </button>
+                        </div>
+                    </div>
+                )}
+            </div>
             
             <div className="relative">
                 <button 
-                    onClick={() => setShowAdminMenu(!showAdminMenu)}
+                    onClick={() => {
+                        setShowAdminMenu(!showAdminMenu);
+                        setShowNotifications(false);
+                    }}
                     className={`p-2 rounded-xl transition-all ${showAdminMenu ? 'text-primary bg-slate-50' : 'text-slate-400 hover:text-primary hover:bg-slate-50'}`}
                 >
                     <span className="material-symbols-outlined text-[24px]">settings</span>
