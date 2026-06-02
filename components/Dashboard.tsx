@@ -693,7 +693,47 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, currentUser, o
                             </span>
                         </div>
                         
-                        <h3 className="text-2xl font-black text-slate-800 uppercase tracking-tight mb-8 leading-tight">{group.name}</h3>
+                        <h3 className="text-2xl font-black text-slate-800 uppercase tracking-tight mb-5 leading-tight">{group.name}</h3>
+                        
+                        {/* Stats Grid for Multiple Locations and Total Calculations */}
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-5 bg-[#F8FAFC] dark:bg-slate-900/50 p-4 rounded-xl border border-slate-100 dark:border-slate-800/60 shadow-sm">
+                            <div>
+                                <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest block">Total QTY Fisik</span>
+                                <span className="text-lg font-black text-[#2D5B9E] dark:text-[#00A3FF] block mt-0.5">
+                                    {group.totalPhysical.toLocaleString()} <span className="text-xs font-bold text-slate-500">{group.unit}</span>
+                                </span>
+                            </div>
+                            <div>
+                                <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest block">Total QTY System</span>
+                                <span className="text-base font-black text-slate-650 dark:text-slate-300 block mt-1">
+                                    {group.totalSystem.toLocaleString()} <span className="text-xs font-bold text-slate-500">{group.unit}</span>
+                                </span>
+                            </div>
+                            <div className="col-span-2 sm:col-span-1 border-t sm:border-t-0 sm:border-l border-slate-200/60 dark:border-slate-800/60 pt-3 sm:pt-0 sm:pl-4">
+                                <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest block">Lokasi Berbeda</span>
+                                <span className="text-base font-black text-slate-700 dark:text-slate-300 block mt-1">
+                                    {group.locationsCount} <span className="text-xs font-medium text-slate-500">Rak</span>
+                                </span>
+                            </div>
+                        </div>
+
+                        {group.logs.length > 1 && (
+                            <div className="mb-5 p-3.5 bg-sky-50/60 dark:bg-sky-950/20 rounded-xl border border-sky-100 dark:border-sky-800/40 flex items-center gap-3 animate-fade-in">
+                                <div className="w-8 h-8 rounded-lg bg-sky-100 dark:bg-sky-900/40 flex items-center justify-center text-sky-600 dark:text-[#00A3FF] shrink-0">
+                                    <span className="material-symbols-outlined text-[18px]">calculate</span>
+                                </div>
+                                <div className="text-[11px] font-bold text-slate-600 dark:text-slate-300 leading-relaxed">
+                                    <span className="text-slate-400 dark:text-slate-500 font-medium">Berdasarkan Lokasi:</span>{" "}
+                                    <span className="font-extrabold text-slate-800 dark:text-slate-100 bg-white dark:bg-slate-900 px-1.5 py-0.5 rounded border border-slate-200/50 dark:border-slate-800">
+                                        {group.logs.map(l => l.physicalQty).join(' + ')}
+                                    </span>
+                                    {" = "}
+                                    <span className="font-black text-sky-600 dark:text-[#00A3FF]">
+                                        {group.totalPhysical} {group.unit}
+                                    </span>
+                                </div>
+                            </div>
+                        )}
                         
                         <div className="mt-auto">
                             <div className="flex justify-between items-center mb-3">
