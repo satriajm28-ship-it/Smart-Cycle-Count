@@ -311,14 +311,17 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, currentUser, o
         group.logs.map(log => ({
             "Kode Barang": group.sku,
             "Nama Barang": group.name,
+            "QTY System": log.systemQty ?? 0,
             "QTY Fisik": log.physicalQty,
+            "Variance": log.variance ?? (log.physicalQty - (log.systemQty ?? 0)),
             "Satuan": group.unit,
             "Lokasi": log.location,
-            "Batch": log.batchNumber,
-            "Expired": log.expiryDate,
+            "Batch": log.batchNumber || '-',
+            "Expired": log.expiryDate || '-',
             "Team": log.teamMember,
             "Catatan": log.notes || '-',
-            "Jumlah Foto": log.evidencePhotos?.length || 0
+            "Jumlah Foto": log.evidencePhotos?.length || 0,
+            "Tanggal Scan": new Date(log.timestamp).toLocaleString('id-ID')
         }))
     );
     const ws = XLSX.utils.json_to_sheet(exportRows);
@@ -614,7 +617,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, currentUser, o
 
       {/* FILTERS & DATE */}
       <section className="px-8 mt-10 flex flex-col sm:flex-row items-center justify-between gap-4">
-            <div className="flex bg-white p-1 rounded-xl shadow-sm border border-slate-100">
+            <div className="flex bg-white p-1 rounded-xl shadow-sm border border-slate-100 overflow-x-auto w-full sm:w-auto">
                 {[
                     { id: 'all', label: 'All Items' },
                     { id: 'shortage', label: 'Shortage' },
@@ -624,7 +627,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, currentUser, o
                     <button 
                         key={f.id}
                         onClick={() => setActiveFilter(f.id as any)} 
-                        className={`px-6 py-2.5 rounded-lg text-xs font-bold transition-all ${
+                        className={`px-6 py-2.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${
                             activeFilter === f.id 
                             ? 'bg-[#2D5B9E] text-white shadow-md' 
                             : 'text-slate-500 hover:bg-slate-50'
@@ -635,9 +638,19 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, currentUser, o
                 ))}
             </div>
 
-            <div className="flex items-center gap-2 text-slate-500 bg-white px-4 py-2.5 rounded-xl border border-slate-100 shadow-sm">
-                <Clock size={16} />
-                <span className="text-xs font-bold uppercase tracking-tight">Today: {new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+            <div className="flex items-center gap-3 w-full sm:w-auto justify-end flex-wrap">
+                <button 
+                    onClick={handleExportReport}
+                    className="flex items-center gap-2 text-white bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] transition-all px-5 py-2.5 rounded-xl border border-emerald-700 font-extrabold text-xs shadow-md shadow-emerald-600/15 cursor-pointer"
+                >
+                    <span className="material-symbols-outlined text-[16px]">download</span>
+                    Export Excel (.xlsx)
+                </button>
+
+                <div className="flex items-center gap-2 text-slate-500 bg-white px-4 py-2.5 rounded-xl border border-slate-100 shadow-sm">
+                    <Clock size={16} />
+                    <span className="text-xs font-bold uppercase tracking-tight">Today: {new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                </div>
             </div>
       </section>
 
