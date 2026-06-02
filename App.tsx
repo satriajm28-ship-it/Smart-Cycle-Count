@@ -12,7 +12,8 @@ import { Login } from './components/Login';
 import { setPermissionErrorHandler } from './services/storageService';
 import { Home, ClipboardList, Database, Activity } from 'lucide-react';
 import { getSessionUser, clearSessionUser, bootstrapUsers } from './services/authService';
-import { supabase } from './services/supabaseClient';
+import { db } from './services/firebaseClient';
+import { doc, getDoc } from 'firebase/firestore';
 
 const App: React.FC = () => {
   const [view, setView] = useState<AppView>(AppView.DASHBOARD);
@@ -24,8 +25,18 @@ const App: React.FC = () => {
   
   const [isOnline, setIsOnline] = useState(navigator.onLine);
 
+  // PWA Install Prompt State
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [showInstallBanner, setShowInstallBanner] = useState(false);
+  const [isIOS, setIsIOS] = useState(false);
+
   useEffect(() => {
     let mounted = true;
+
+    // Detect iOS devices
+    const userAgent = window.navigator.userAgent.toLowerCase();
+    const isIosDevice = /iphone|ipad|ipod/.test(userAgent);
+    setIsIOS(isIosDevice);
 
     // 1. Check for existing session on load
     const savedUser = getSessionUser();
@@ -46,17 +57,17 @@ const App: React.FC = () => {
         }
     });
 
-    // 4. Supabase Connection & Bootstrap
+    // 4. Firebase Connection & Bootstrap
     const initDb = async () => {
         try {
             // Simple query to check connection
-            await supabase.from('users').select('username').limit(1);
+            await getDoc(doc(db, 'users', 'admin'));
             if (mounted) {
                 setIsDbConnected(true);
                 bootstrapUsers();
             }
         } catch (error) {
-            console.warn("Supabase connection issue:", error);
+            console.warn("Firebase connection issue:", error);
             if (mounted) {
                 setIsDbConnected(true); // Proceed anyway to allow offline/local usage
                 bootstrapUsers();
@@ -66,12 +77,57 @@ const App: React.FC = () => {
     
     initDb();
 
+    // 5. PWA Install Listener (Android/Chrome)
+    const handleBeforeInstallPrompt = (e: any) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+      const isStandalone = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone;
+      const isDismissed = localStorage.getItem('pwa_banner_dismissed') === 'true';
+      if (!isStandalone && !isDismissed && mounted) {
+        setShowInstallBanner(true);
+      }
+    };
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+
+    // Dynamic prompt for iOS if not standalone & not dismissed
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone;
+    const isDismissed = localStorage.getItem('pwa_banner_dismissed') === 'true';
+    if (!isStandalone && isIosDevice && !isDismissed && mounted) {
+      const iosTimer = setTimeout(() => {
+        if (mounted) setShowInstallBanner(true);
+      }, 5000);
+      return () => clearTimeout(iosTimer);
+    }
+
     return () => {
         mounted = false;
         window.removeEventListener('online', handleOnline);
         window.removeEventListener('offline', handleOffline);
+        window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
     };
   }, []);
+
+  const handleInstallClick = async () => {
+    if (isIOS) {
+      alert("Cara Pasang Aplikasi di iPhone (PWA):\n\n1. Tap icon 'Share' (Bagikan) di bagian bawah Safari.\n2. Gulir ke bawah pilih 'Add to Home Screen' (Tambah ke Layar Utama).\n3. Beri nama & tap 'Add'.\n\nSelamat mencoba di perangkat iOS!");
+      localStorage.setItem('pwa_banner_dismissed', 'true');
+      setShowInstallBanner(false);
+      return;
+    }
+
+    if (!deferredPrompt) return;
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    console.log(`User installation decision: ${outcome}`);
+    setDeferredPrompt(null);
+    setShowInstallBanner(false);
+  };
+
+  const handleDismissBanner = () => {
+    localStorage.setItem('pwa_banner_dismissed', 'true');
+    setShowInstallBanner(false);
+  };
 
   const navigate = (newView: AppView, params?: any) => {
     setNavParams(params);
@@ -208,6 +264,47 @@ const App: React.FC = () => {
                 </div>
             )}
         </div>
+
+        {/* PWA Install Promotion Banner */}
+        {showInstallBanner && (
+          <div className="fixed bottom-[88px] left-4 right-4 md:max-w-md md:left-auto md:right-4 bg-white dark:bg-slate-900 rounded-2xl p-4 shadow-[0_12px_40px_rgba(0,163,255,0.2)] border border-[#00A3FF]/20 z-[200] animate-fade-in flex flex-col gap-3">
+            <div className="flex items-start gap-3">
+              <div className="w-12 h-12 bg-[#00A3FF]/10 rounded-xl flex items-center justify-center text-primary shrink-0">
+                <span className="material-symbols-outlined text-3xl font-bold">smartphone</span>
+              </div>
+              <div className="flex-1 min-w-0">
+                <h4 className="text-sm font-black text-slate-850 dark:text-white flex items-center gap-1.5">
+                  Install Aplikasi Smartphone
+                  <span className="bg-[#00A3FF]/10 text-primary text-[9px] px-1.5 py-0.5 rounded-full uppercase tracking-wider font-extrabold">PWA</span>
+                </h4>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">
+                  Pasang aplikasi di layar utama HP Anda untuk scan barcode lebih mulus, hemat kuota data, & tetap bisa hitung offline saat sinyal gudang hilang!
+                </p>
+              </div>
+              <button 
+                onClick={handleDismissBanner}
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition shrink-0 cursor-pointer"
+              >
+                <span className="material-symbols-outlined text-lg">close</span>
+              </button>
+            </div>
+            <div className="flex gap-2 justify-end">
+              <button 
+                onClick={handleDismissBanner}
+                className="px-3 py-1.5 text-xs font-bold text-slate-400 hover:text-slate-600 dark:text-slate-400 dark:hover:text-slate-200 transition cursor-pointer"
+              >
+                Nanti saja
+              </button>
+              <button 
+                onClick={handleInstallClick}
+                className="px-4 py-1.5 bg-primary hover:bg-opacity-90 text-white text-xs font-black rounded-lg shadow-md transition flex items-center gap-1.5 cursor-pointer"
+              >
+                <span className="material-symbols-outlined text-[14px] font-bold">download</span>
+                Pasang Sekarang
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Bottom Navigation Bar */}
         <div className="fixed bottom-0 left-0 right-0 bg-white dark:bg-slate-900 shadow-[0_-4px_20px_rgba(0,0,0,0.05)] dark:shadow-[0_-4px_20px_rgba(0,0,0,0.2)] z-[130] pb-[env(safe-area-inset-bottom)]">

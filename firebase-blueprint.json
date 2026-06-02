@@ -1,0 +1,112 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "Information about application operators and administrators",
+      "type": "object",
+      "properties": {
+        "username": { "type": "string" },
+        "password": { "type": "string" },
+        "role": { "type": "string", "enum": ["admin", "user"] },
+        "name": { "type": "string" }
+      },
+      "required": ["username", "password", "role", "name"]
+    },
+    "MasterItem": {
+      "title": "MasterItem",
+      "description": "Static stock-keeping unit information from the backend database",
+      "type": "object",
+      "properties": {
+        "sku": { "type": "string" },
+        "name": { "type": "string" },
+        "systemStock": { "type": "number" },
+        "batchNumber": { "type": "string" },
+        "expiryDate": { "type": "string" },
+        "category": { "type": "string" },
+        "unit": { "type": "string" }
+      },
+      "required": ["sku", "name", "systemStock"]
+    },
+    "AuditRecord": {
+      "title": "AuditRecord",
+      "description": "Stock count transaction entries captured by operators",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "sku": { "type": "string" },
+        "itemName": { "type": "string" },
+        "location": { "type": "string" },
+        "batchNumber": { "type": "string" },
+        "expiryDate": { "type": "string" },
+        "systemQty": { "type": "number" },
+        "physicalQty": { "type": "number" },
+        "variance": { "type": "number" },
+        "timestamp": { "type": "number" },
+        "teamMember": { "type": "string" },
+        "notes": { "type": "string" },
+        "evidencePhotos": { "type": "array"}
+      },
+      "required": ["id", "sku", "itemName", "location", "physicalQty", "timestamp", "teamMember"]
+    },
+    "LocationState": {
+      "title": "LocationState",
+      "description": "Verification status information mapping zone locations",
+      "type": "object",
+      "properties": {
+        "locationId": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "audited", "empty", "damaged"] },
+        "timestamp": { "type": "number" },
+        "photoUrl": { "type": "string" },
+        "description": { "type": "string" },
+        "reportedBy": { "type": "string" }
+      },
+      "required": ["locationId", "status", "timestamp"]
+    },
+    "ActivityLog": {
+      "title": "ActivityLog",
+      "description": "Log of actions performed in the system for tracking changes and audits",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "type": { "type": "string", "enum": ["create", "update", "delete", "scan", "adjustment", "alert", "start"] },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "timestamp": { "type": "number" },
+        "user": { "type": "string" },
+        "details": { "type": "string" },
+        "photos": { "type": "array"}
+      },
+      "required": ["id", "type", "title", "description", "timestamp", "user"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "Collection of all authorized users"
+    },
+    "/master_data/{skuId}": {
+      "schema": "MasterItem",
+      "description": "Master list of SKU data"
+    },
+    "/audit_logs/{logId}": {
+      "schema": "AuditRecord",
+      "description": "Stock opname physical scan transactions"
+    },
+    "/location_states/{locationId}": {
+      "schema": "LocationState",
+      "description": "Status updates mapping locations to their audited states"
+    },
+    "/activity_logs/{activityId}": {
+      "schema": "ActivityLog",
+      "description": "System activity logs"
+    },
+    "/backup_audit_logs_latest/{backupLogId}": {
+      "schema": "AuditRecord",
+      "description": "Backup area for cleared audit records"
+    },
+    "/backup_location_states_latest/{backupLocationId}": {
+      "schema": "LocationState",
+      "description": "Backup area for cleared location statuses"
+    }
+  }
+}

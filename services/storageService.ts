@@ -1,5 +1,17 @@
-
-import { supabase } from './supabaseClient';
+import { db, handleFirestoreError, OperationType } from './firebaseClient';
+import { 
+  collection, 
+  doc, 
+  query, 
+  orderBy, 
+  getDoc,
+  getDocs, 
+  setDoc, 
+  deleteDoc, 
+  updateDoc,
+  onSnapshot, 
+  writeBatch
+} from 'firebase/firestore';
 import { AuditRecord, MasterItem, MasterLocation, LocationState, LocationStatusType, ActivityLog } from '../types';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -50,113 +62,80 @@ export const setLocal = (key: string, data: any) => {
 // --- SUBSCRIPTIONS ---
 
 export const subscribeToAuditLogs = (onUpdate: (data: AuditRecord[]) => void, onError?: (error: any) => void) => {
-    let currentData: AuditRecord[] = [];
+    const q = query(collection(db, TABLES.AUDIT_LOGS), orderBy('timestamp', 'desc'));
+    
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+        const auditLogs: AuditRecord[] = [];
+        snapshot.forEach((doc) => {
+            auditLogs.push(doc.data() as AuditRecord);
+        });
+        setLocal(LOCAL_KEYS.AUDIT_LOGS, auditLogs);
+        onUpdate(auditLogs);
+    }, (error) => {
+        console.error("Audit logs subscription error:", error);
+        if (onError) onError(error);
+        else handleFirestoreError(error, OperationType.LIST, TABLES.AUDIT_LOGS);
+    });
 
-    const fetchInitial = async () => {
-        const { data, error } = await supabase.from(TABLES.AUDIT_LOGS).select('*').order('timestamp', { ascending: false });
-        if (error) {
-            if (onError) onError(error);
-        } else {
-            currentData = data as AuditRecord[];
-            setLocal(LOCAL_KEYS.AUDIT_LOGS, currentData);
-            onUpdate(currentData);
-        }
-    };
-
-    fetchInitial();
-
-    const channel = supabase.channel('audit_logs_changes')
-        .on('postgres_changes', { event: '*', schema: 'public', table: TABLES.AUDIT_LOGS }, async () => {
-            await fetchInitial();
-        })
-        .subscribe();
-
-    return () => {
-        supabase.removeChannel(channel);
-    };
+    return unsubscribe;
 };
 
 export const subscribeToMasterData = (onUpdate: (data: MasterItem[]) => void, onError?: (error: any) => void) => {
-    let currentData: MasterItem[] = [];
+    const q = collection(db, TABLES.MASTER_DATA);
+    
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+        const list: MasterItem[] = [];
+        snapshot.forEach((doc) => {
+            list.push(doc.data() as MasterItem);
+        });
+        setLocal(LOCAL_KEYS.MASTER_DATA, list);
+        onUpdate(list);
+    }, (error) => {
+        console.error("Master data subscription error:", error);
+        if (onError) onError(error);
+        else handleFirestoreError(error, OperationType.LIST, TABLES.MASTER_DATA);
+    });
 
-    const fetchInitial = async () => {
-        const { data, error } = await supabase.from(TABLES.MASTER_DATA).select('*');
-        if (error) {
-            if (onError) onError(error);
-        } else {
-            currentData = data as MasterItem[];
-            setLocal(LOCAL_KEYS.MASTER_DATA, currentData);
-            onUpdate(currentData);
-        }
-    };
-
-    fetchInitial();
-
-    const channel = supabase.channel('master_data_changes')
-        .on('postgres_changes', { event: '*', schema: 'public', table: TABLES.MASTER_DATA }, async () => {
-            await fetchInitial();
-        })
-        .subscribe();
-
-    return () => {
-        supabase.removeChannel(channel);
-    };
+    return unsubscribe;
 };
 
 export const subscribeToLocationStates = (onUpdate: (data: Record<string, LocationState>) => void, onError?: (error: any) => void) => {
-    let currentData: Record<string, LocationState> = {};
+    const q = collection(db, TABLES.LOCATION_STATES);
+    
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+        const states: Record<string, LocationState> = {};
+        snapshot.forEach((doc) => {
+            const item = doc.data() as LocationState;
+            states[item.locationId] = item;
+        });
+        setLocal(LOCAL_KEYS.STATES, states);
+        onUpdate(states);
+    }, (error) => {
+        console.error("Location states subscription error:", error);
+        if (onError) onError(error);
+        else handleFirestoreError(error, OperationType.LIST, TABLES.LOCATION_STATES);
+    });
 
-    const fetchInitial = async () => {
-        const { data, error } = await supabase.from(TABLES.LOCATION_STATES).select('*');
-        if (error) {
-            if (onError) onError(error);
-        } else {
-            const states: Record<string, LocationState> = {};
-            (data as LocationState[]).forEach(doc => { states[doc.locationId] = doc; });
-            currentData = states;
-            setLocal(LOCAL_KEYS.STATES, currentData);
-            onUpdate(currentData);
-        }
-    };
-
-    fetchInitial();
-
-    const channel = supabase.channel('location_states_changes')
-        .on('postgres_changes', { event: '*', schema: 'public', table: TABLES.LOCATION_STATES }, async () => {
-            await fetchInitial();
-        })
-        .subscribe();
-
-    return () => {
-        supabase.removeChannel(channel);
-    };
+    return unsubscribe;
 };
 
 export const subscribeToActivityLogs = (onUpdate: (data: ActivityLog[]) => void, onError?: (error: any) => void) => {
-    let currentData: ActivityLog[] = [];
+    const q = query(collection(db, TABLES.ACTIVITY_LOGS), orderBy('timestamp', 'desc'));
+    
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+        const list: ActivityLog[] = [];
+        snapshot.forEach((doc) => {
+            list.push(doc.data() as ActivityLog);
+        });
+        setLocal(LOCAL_KEYS.ACTIVITY_LOGS, list);
+        onUpdate(list);
+    }, (error) => {
+        console.error("Activity logs subscription error:", error);
+        if (onError) onError(error);
+        else handleFirestoreError(error, OperationType.LIST, TABLES.ACTIVITY_LOGS);
+    });
 
-    const fetchInitial = async () => {
-        const { data, error } = await supabase.from(TABLES.ACTIVITY_LOGS).select('*').order('timestamp', { ascending: false });
-        if (error) {
-            if (onError) onError(error);
-        } else {
-            currentData = data as ActivityLog[];
-            setLocal(LOCAL_KEYS.ACTIVITY_LOGS, currentData);
-            onUpdate(currentData);
-        }
-    };
-
-    fetchInitial();
-
-    const channel = supabase.channel('activity_logs_changes')
-        .on('postgres_changes', { event: '*', schema: 'public', table: TABLES.ACTIVITY_LOGS }, async () => {
-            await fetchInitial();
-        })
-        .subscribe();
-
-    return () => {
-        supabase.removeChannel(channel);
-    };
+    return unsubscribe;
 };
 
 // --- OPERATIONS ---
@@ -169,7 +148,11 @@ export const saveActivityLog = async (log: Omit<ActivityLog, 'id' | 'timestamp'>
       id,
       timestamp: Date.now()
     };
-    await supabase.from(TABLES.ACTIVITY_LOGS).insert(fullLog);
+    try {
+        await setDoc(doc(db, TABLES.ACTIVITY_LOGS, id), fullLog);
+    } catch (error) {
+        handleFirestoreError(error, OperationType.WRITE, `${TABLES.ACTIVITY_LOGS}/${id}`);
+    }
   } catch (e) {
     console.error("Failed to save activity log:", e);
   }
@@ -183,10 +166,19 @@ export const getMasterData = async (): Promise<MasterItem[]> => {
 
 export const fetchMasterData = async (): Promise<MasterItem[]> => {
     try {
-        const { data, error } = await supabase.from(TABLES.MASTER_DATA).select('*');
-        if (error) throw error;
+        let snapshot;
+        try {
+            snapshot = await getDocs(collection(db, TABLES.MASTER_DATA));
+        } catch (error) {
+            handleFirestoreError(error, OperationType.LIST, TABLES.MASTER_DATA);
+        }
+
+        const data: MasterItem[] = [];
+        snapshot.forEach((doc) => {
+            data.push(doc.data() as MasterItem);
+        });
         setLocal(LOCAL_KEYS.MASTER_DATA, data);
-        return data as MasterItem[];
+        return data;
     } catch (e) {
         console.error("Fetch master data failed:", e);
         return getLocal<MasterItem[]>(LOCAL_KEYS.MASTER_DATA, []);
@@ -196,11 +188,20 @@ export const fetchMasterData = async (): Promise<MasterItem[]> => {
 export const getMasterLocations = async (): Promise<MasterLocation[]> => getLocal<MasterLocation[]>(LOCAL_KEYS.LOCATIONS, []);
 
 export const saveMasterData = async (items: MasterItem[], onProgress?: (progress: number) => void) => {
-    const batchSize = 100;
+    const batchSize = 400;
     const total = items.length;
     for (let i = 0; i < total; i += batchSize) {
         const chunk = items.slice(i, i + batchSize);
-        await supabase.from(TABLES.MASTER_DATA).upsert(chunk, { onConflict: 'sku' });
+        const batch = writeBatch(db);
+        chunk.forEach(item => {
+            const docRef = doc(db, TABLES.MASTER_DATA, item.sku);
+            batch.set(docRef, item);
+        });
+        try {
+            await batch.commit();
+        } catch (error) {
+            handleFirestoreError(error, OperationType.WRITE, TABLES.MASTER_DATA);
+        }
         if (onProgress) onProgress(Math.round(((i + chunk.length) / total) * 100));
     }
     await fetchMasterData();
@@ -208,48 +209,59 @@ export const saveMasterData = async (items: MasterItem[], onProgress?: (progress
     await saveActivityLog({
         type: 'update',
         title: 'Master Data Updated',
-        description: `Successfully imported ${total} items to master database.`,
+        description: `Berhasil mengimpor ${total} item ke database master.`,
         user: 'System/Admin'
     });
 };
 
 export const deleteAllMasterData = async (onStatus?: (msg: string) => void) => {
     if (onStatus) onStatus(`Cleaning master data...`);
-    // Supabase requires a filter for delete. We delete where sku is not null.
-    await supabase.from(TABLES.MASTER_DATA).delete().neq('sku', 'dummy_value_to_delete_all');
+    try {
+        await clearTable(TABLES.MASTER_DATA);
+    } catch (error) {
+        handleFirestoreError(error, OperationType.DELETE, TABLES.MASTER_DATA);
+    }
     setLocal(LOCAL_KEYS.MASTER_DATA, []);
     
     await saveActivityLog({
         type: 'delete',
         title: 'Master Data Cleared',
-        description: 'All items in the master database have been deleted.',
+        description: 'Semua item di database master telah dihapus.',
         user: 'Admin'
     });
 };
 
 export const saveAuditLog = async (record: AuditRecord) => {
   try {
-      const { error: logError } = await supabase.from(TABLES.AUDIT_LOGS).insert(record);
-      if (logError) throw logError;
+      try {
+          await setDoc(doc(db, TABLES.AUDIT_LOGS, record.id), record);
+      } catch (error) {
+          handleFirestoreError(error, OperationType.WRITE, `${TABLES.AUDIT_LOGS}/${record.id}`);
+      }
 
-      const { error: stateError } = await supabase.from(TABLES.LOCATION_STATES).upsert({
+      const state: LocationState = {
           locationId: record.location,
           status: 'audited',
           timestamp: record.timestamp,
           photoUrl: record.evidencePhotos?.[0],
           description: record.notes,
           reportedBy: record.teamMember
-      }, { onConflict: 'locationId' });
-      if (stateError) throw stateError;
+      };
+
+      try {
+          await setDoc(doc(db, TABLES.LOCATION_STATES, record.location), state);
+      } catch (error) {
+          handleFirestoreError(error, OperationType.WRITE, `${TABLES.LOCATION_STATES}/${record.location}`);
+      }
       
       window.dispatchEvent(new Event('auditDataChanged'));
       
       await saveActivityLog({
           type: 'scan',
-          title: 'Scan Verified',
-          description: `Operator: ${record.teamMember} scanned ${record.physicalQty} units of SKU: ${record.sku}`,
+          title: 'Scan Terverifikasi',
+          description: `Operator: ${record.teamMember} memindai ${record.physicalQty} unit SKU: ${record.sku}`,
           user: record.teamMember,
-          details: `Location: ${record.location}`,
+          details: `Lokasi: ${record.location}`,
           photos: record.evidencePhotos
       });
   } catch (error: any) {
@@ -260,14 +272,17 @@ export const saveAuditLog = async (record: AuditRecord) => {
 
 export const updateAuditLog = async (id: string, updates: Partial<AuditRecord>) => {
     try {
-        const { error } = await supabase.from(TABLES.AUDIT_LOGS).update(updates).eq('id', id);
-        if (error) throw error;
+        try {
+            await updateDoc(doc(db, TABLES.AUDIT_LOGS, id), updates);
+        } catch (error) {
+            handleFirestoreError(error, OperationType.UPDATE, `${TABLES.AUDIT_LOGS}/${id}`);
+        }
         window.dispatchEvent(new Event('auditDataChanged'));
         
         await saveActivityLog({
             type: 'update',
             title: 'Audit Record Updated',
-            description: `Audit record ${id} was updated.`,
+            description: `Catatan audit ${id} telah diperbarui.`,
             user: 'User/Admin'
         });
     } catch (e) {
@@ -278,14 +293,17 @@ export const updateAuditLog = async (id: string, updates: Partial<AuditRecord>) 
 
 export const deleteAuditLog = async (id: string) => {
     try {
-        const { error } = await supabase.from(TABLES.AUDIT_LOGS).delete().eq('id', id);
-        if (error) throw error;
+        try {
+            await deleteDoc(doc(db, TABLES.AUDIT_LOGS, id));
+        } catch (error) {
+            handleFirestoreError(error, OperationType.DELETE, `${TABLES.AUDIT_LOGS}/${id}`);
+        }
         window.dispatchEvent(new Event('auditDataChanged'));
         
         await saveActivityLog({
             type: 'delete',
             title: 'Audit Record Deleted',
-            description: `Audit record ${id} was deleted.`,
+            description: `Catatan audit ${id} telah dihapus.`,
             user: 'Admin'
         });
     } catch (e) {
@@ -296,45 +314,65 @@ export const deleteAuditLog = async (id: string) => {
 
 // --- HELPER: MOVE DATA (Copy then Delete) ---
 const moveTableData = async (
-    sourceTable: string, 
-    targetTable: string, 
+    sourceCollection: string, 
+    targetCollection: string, 
     onStatus?: (msg: string) => void
 ) => {
-    const { data, error } = await supabase.from(sourceTable).select('*');
-    if (error || !data || data.length === 0) return;
+    let snapshot;
+    try {
+        snapshot = await getDocs(collection(db, sourceCollection));
+    } catch (e) {
+        handleFirestoreError(e, OperationType.LIST, sourceCollection);
+    }
+    
+    if (snapshot.empty) return;
 
-    const total = data.length;
+    const docs = snapshot.docs;
+    const total = docs.length;
     const batchSize = 400;
     
-    if (onStatus) onStatus(`Backing up ${sourceTable}...`);
+    if (onStatus) onStatus(`Backing up ${sourceCollection}...`);
     for (let i = 0; i < total; i += batchSize) {
-        const chunk = data.slice(i, i + batchSize);
-        await supabase.from(targetTable).upsert(chunk);
+        const chunk = docs.slice(i, i + batchSize);
+        const batch = writeBatch(db);
+        chunk.forEach(docSnap => {
+            const targetDocRef = doc(db, targetCollection, docSnap.id);
+            batch.set(targetDocRef, docSnap.data());
+        });
+        await batch.commit();
     }
 
-    if (onStatus) onStatus(`Clearing ${sourceTable}...`);
-    // Delete all
-    await supabase.from(sourceTable).delete().neq('id', 'dummy'); 
-    // Note: for location_states the PK is locationId, so we might need a different condition if 'id' doesn't exist.
-    // Let's use a condition that is always true for the table.
-    // For audit_logs it's 'id', for location_states it's 'locationId'.
-    const pkColumn = sourceTable.includes('location') ? 'locationId' : 'id';
-    await supabase.from(sourceTable).delete().neq(pkColumn, 'dummy');
+    if (onStatus) onStatus(`Clearing ${sourceCollection}...`);
+    const deleteBatch = writeBatch(db);
+    docs.forEach(docSnap => {
+        deleteBatch.delete(docSnap.ref);
+    });
+    await deleteBatch.commit();
 };
 
 // --- HELPER: CLEAR TABLE ---
-const clearTable = async (tableName: string) => {
-    const pkColumn = tableName.includes('location') ? 'locationId' : 'id';
-    await supabase.from(tableName).delete().neq(pkColumn, 'dummy');
+const clearTable = async (collectionName: string) => {
+    const snapshot = await getDocs(collection(db, collectionName));
+    if (snapshot.empty) return;
+    const batch = writeBatch(db);
+    snapshot.docs.forEach(docSnap => {
+        batch.delete(docSnap.ref);
+    });
+    await batch.commit();
 };
 
 // --- FEATURE: RESET ALL DATA (With Backup) ---
 export const resetAllAuditData = async (onStatus?: (msg: string) => void) => {
     try {
-        const { count: logsCount } = await supabase.from(TABLES.AUDIT_LOGS).select('*', { count: 'exact', head: true });
-        const { count: statesCount } = await supabase.from(TABLES.LOCATION_STATES).select('*', { count: 'exact', head: true });
+        let logsSnap, statesSnap;
+        try {
+            logsSnap = await getDocs(collection(db, TABLES.AUDIT_LOGS));
+            statesSnap = await getDocs(collection(db, TABLES.LOCATION_STATES));
+        } catch (error) {
+            handleFirestoreError(error, OperationType.LIST, 'All');
+        }
 
-        if (!logsCount && !statesCount) {
+        if (logsSnap.empty && statesSnap.empty) {
             throw new Error("Tidak ada data untuk di-reset.");
         }
 
@@ -355,7 +393,7 @@ export const resetAllAuditData = async (onStatus?: (msg: string) => void) => {
         await saveActivityLog({
             type: 'adjustment',
             title: 'System Reset',
-            description: 'All audit data has been reset and moved to backup.',
+            description: 'Semua data audit telah di-reset dan dipindah ke backup.',
             user: 'Admin'
         });
     } catch (e: any) {
@@ -369,10 +407,15 @@ export const restoreAuditData = async (onStatus?: (msg: string) => void) => {
     try {
         if (onStatus) onStatus("Mengecek backup...");
 
-        const { count: logsCount } = await supabase.from(BACKUP_TABLES.AUDIT_LOGS).select('*', { count: 'exact', head: true });
-        const { count: statesCount } = await supabase.from(BACKUP_TABLES.LOCATION_STATES).select('*', { count: 'exact', head: true });
+        let logsSnap, statesSnap;
+        try {
+            logsSnap = await getDocs(collection(db, BACKUP_TABLES.AUDIT_LOGS));
+            statesSnap = await getDocs(collection(db, BACKUP_TABLES.LOCATION_STATES));
+        } catch (error) {
+            handleFirestoreError(error, OperationType.LIST, 'Backup');
+        }
 
-        if (!logsCount && !statesCount) {
+        if (logsSnap.empty && statesSnap.empty) {
             throw new Error("Tidak ada data backup yang ditemukan.");
         }
 
@@ -385,7 +428,7 @@ export const restoreAuditData = async (onStatus?: (msg: string) => void) => {
         await saveActivityLog({
             type: 'adjustment',
             title: 'Data Restored',
-            description: 'Audit data has been restored from backup.',
+            description: 'Data audit telah dipulihkan dari data cadangan (backup).',
             user: 'Admin'
         });
     } catch (e: any) {
@@ -404,14 +447,18 @@ export const updateLocationStatus = async (
         photoUrl: data?.photoUrl, description: data?.description, reportedBy: data?.teamMember
     };
     try {
-        await supabase.from(TABLES.LOCATION_STATES).upsert(state, { onConflict: 'locationId' });
+        try {
+            await setDoc(doc(db, TABLES.LOCATION_STATES, locationName), state);
+        } catch (error) {
+            handleFirestoreError(error, OperationType.WRITE, `${TABLES.LOCATION_STATES}/${locationName}`);
+        }
         
         await saveActivityLog({
             type: status === 'damaged' ? 'alert' : 'update',
             title: status === 'damaged' ? 'Discrepancy Alert' : 'Location Status Updated',
             description: status === 'damaged' 
-                ? `Critical mismatch detected in ${locationName}. Manual review required.`
-                : `Location ${locationName} status changed to ${status}.`,
+                ? `Ketidaksesuaian kritis terdeteksi di lokasi ${locationName}. Diperlukan review manual.`
+                : `Status lokasi ${locationName} berubah menjadi ${status}.`,
             user: data?.teamMember || 'System',
             details: data?.description,
             photos: data?.photoUrl ? [data.photoUrl] : undefined
@@ -423,4 +470,3 @@ export const updateLocationStatus = async (
 
 export const getAuditLogs = async (): Promise<AuditRecord[]> => getLocal<AuditRecord[]>(LOCAL_KEYS.AUDIT_LOGS, []);
 export const getLocationStates = async (): Promise<Record<string, LocationState>> => getLocal<Record<string, LocationState>>(LOCAL_KEYS.STATES, {});
-

@@ -1,0 +1,52 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Default deny for safety
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Users Collection ---
+    match /users/{userId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    // --- Master Data ---
+    match /master_data/{skuId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    // --- Audit Logs ---
+    match /audit_logs/{logId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    // --- Location States ---
+    match /location_states/{locationId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    // --- Activity Logs ---
+    match /activity_logs/{activityId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    // --- Backup Audit Logs ---
+    match /backup_audit_logs_latest/{backupLogId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    // --- Backup Location States ---
+    match /backup_location_states_latest/{backupLocationId} {
+      allow read: if true;
+      allow write: if true;
+    }
+  }
+}

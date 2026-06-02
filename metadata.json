@@ -3,5 +3,8 @@
   "description": "Professional Inventory Count application with Barcode/QR scanning support, automatic batch/expiry lookup, variance calculation, and AI-powered insights using Gemini.",
   "requestFramePermissions": [
     "camera"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
   ]
 }

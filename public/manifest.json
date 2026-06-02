@@ -1,0 +1,25 @@
+{
+  "name": "Smart Stock Opname",
+  "short_name": "StockOpname",
+  "description": "Professional Inventory Count & Cycle Count with Barcode scanner, batch/expiry lookup, variance calculations, and offline capabilities.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f6f6f8",
+  "theme_color": "#00A3FF",
+  "orientation": "portrait-primary",
+  "categories": ["business", "productivity"],
+  "icons": [
+    {
+      "src": "/app-icon.svg",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/app-icon-maskable.svg",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ]
+}
