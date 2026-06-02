@@ -25,6 +25,10 @@ const App: React.FC = () => {
   
   const [isOnline, setIsOnline] = useState(navigator.onLine);
 
+  // Photo viewer deep link states
+  const [photoViewData, setPhotoViewData] = useState<{itemName: string, sku: string, location: string, photo: string} | null>(null);
+  const [loadingPhoto, setLoadingPhoto] = useState(false);
+
   // PWA Install Prompt State
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [showInstallBanner, setShowInstallBanner] = useState(false);
@@ -108,6 +112,41 @@ const App: React.FC = () => {
     };
   }, []);
 
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const photoId = params.get('open_photo');
+    if (photoId) {
+      setLoadingPhoto(true);
+      const fetchPhoto = async () => {
+        try {
+          const docRef = doc(db, 'audit_logs', photoId);
+          const snap = await getDoc(docRef);
+          if (snap.exists()) {
+            const data = snap.data();
+            if (data.evidencePhotos && data.evidencePhotos.length > 0) {
+              setPhotoViewData({
+                itemName: data.itemName || 'Item Baru',
+                sku: data.sku || '-',
+                location: data.location || '-',
+                photo: data.evidencePhotos[0]
+              });
+            } else {
+              alert("Audit record ini tidak memiliki foto bukti.");
+            }
+          } else {
+            alert("Record audit tidak ditemukan.");
+          }
+        } catch (err: any) {
+          console.error("Gagal memuat foto:", err);
+          alert("Gagal memuat foto bukti dari database.");
+        } finally {
+          setLoadingPhoto(false);
+        }
+      };
+      fetchPhoto();
+    }
+  }, [isDbConnected]); // Re-run if db is connected
+
   const handleInstallClick = async () => {
     if (isIOS) {
       alert("Cara Pasang Aplikasi di iPhone (PWA):\n\n1. Tap icon 'Share' (Bagikan) di bagian bawah Safari.\n2. Gulir ke bawah pilih 'Add to Home Screen' (Tambah ke Layar Utama).\n3. Beri nama & tap 'Add'.\n\nSelamat mencoba di perangkat iOS!");
@@ -159,6 +198,76 @@ const App: React.FC = () => {
                 <span className="material-symbols-outlined animate-spin text-2xl text-primary">sync</span>
                 <p className="text-xs font-medium text-slate-500 uppercase tracking-tighter">Establishing Connection...</p>
             </div>
+        </div>
+    );
+  }
+
+  // 1.5. Show Photo Loader or Photo Modal (handles deep links for Excel photo viewing)
+  if (loadingPhoto) {
+    return (
+        <div className="flex flex-col items-center justify-center min-h-screen bg-[#050A18] text-white gap-4">
+            <span className="material-symbols-outlined animate-spin text-4xl text-primary">sync</span>
+            <p className="text-xs font-bold uppercase tracking-widest text-slate-400">Memuat Foto Bukti...</p>
+        </div>
+    );
+  }
+
+  if (photoViewData) {
+    return (
+        <div className="fixed inset-0 bg-[#050A18]/95 z-[300] flex flex-col items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl max-w-lg w-full overflow-hidden shadow-2xl flex flex-col border border-slate-100 dark:border-slate-800">
+            <div className="p-5 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50 dark:bg-slate-900/50">
+              <div>
+                <h3 className="font-black text-slate-850 dark:text-white text-base">Bukti Foto Audit</h3>
+                <p className="text-xs text-slate-400 font-bold mt-0.5">{photoViewData.itemName}</p>
+              </div>
+              <button 
+                onClick={() => {
+                  setPhotoViewData(null);
+                  const newUrl = window.location.protocol + "//" + window.location.host + window.location.pathname;
+                  window.history.pushState({path:newUrl}, '', newUrl);
+                }}
+                className="w-9 h-9 rounded-full bg-slate-200 hover:bg-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 flex items-center justify-center transition cursor-pointer text-slate-600 dark:text-slate-300"
+              >
+                <span className="material-symbols-outlined text-lg">close</span>
+              </button>
+            </div>
+            
+            <div className="p-6 flex flex-col items-center gap-4 bg-slate-100/50 dark:bg-slate-950/20">
+              <div className="relative rounded-2xl overflow-hidden bg-slate-200 dark:bg-slate-800 border border-slate-200/50 shadow-inner w-full max-h-[350px] flex items-center justify-center">
+                <img 
+                  src={photoViewData.photo} 
+                  className="max-h-[350px] object-contain max-w-full" 
+                  alt="Bukti Audit Fisik" 
+                  referrerPolicy="no-referrer"
+                />
+              </div>
+              
+              <div className="grid grid-cols-2 gap-3 w-full text-xs">
+                <div className="bg-white dark:bg-slate-800/50 p-3 rounded-xl border border-slate-100 dark:border-slate-800/80">
+                  <span className="text-slate-400 font-bold block uppercase text-[10px] tracking-wider">Lokasi Rak</span>
+                  <span className="text-slate-700 dark:text-slate-200 font-black text-sm mt-0.5 block">{photoViewData.location}</span>
+                </div>
+                <div className="bg-white dark:bg-slate-800/50 p-3 rounded-xl border border-slate-100 dark:border-slate-800/80">
+                  <span className="text-slate-400 font-bold block uppercase text-[10px] tracking-wider">Kode Barang</span>
+                  <span className="text-slate-700 dark:text-slate-200 font-black text-sm mt-0.5 block">{photoViewData.sku}</span>
+                </div>
+              </div>
+            </div>
+            
+            <div className="p-5 border-t border-slate-100 dark:border-slate-800 flex justify-end gap-3 bg-slate-50 dark:bg-slate-900/50">
+              <button 
+                onClick={() => {
+                  setPhotoViewData(null);
+                  const newUrl = window.location.protocol + "//" + window.location.host + window.location.pathname;
+                  window.history.pushState({path:newUrl}, '', newUrl);
+                }}
+                className="px-6 py-2.5 bg-[#00A3FF] hover:bg-opacity-90 text-white text-xs font-black rounded-xl shadow-md transition text-center cursor-pointer"
+              >
+                Masuk ke Dashboard
+              </button>
+            </div>
+          </div>
         </div>
     );
   }

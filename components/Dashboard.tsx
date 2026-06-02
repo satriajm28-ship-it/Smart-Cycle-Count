@@ -308,21 +308,27 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, currentUser, o
 
   const handleExportReport = () => {
     const exportRows = groupedData.flatMap(group => 
-        group.logs.map(log => ({
-            "Kode Barang": group.sku,
-            "Nama Barang": group.name,
-            "QTY System": log.systemQty ?? 0,
-            "QTY Fisik": log.physicalQty,
-            "Variance": log.variance ?? (log.physicalQty - (log.systemQty ?? 0)),
-            "Satuan": group.unit,
-            "Lokasi": log.location,
-            "Batch": log.batchNumber || '-',
-            "Expired": log.expiryDate || '-',
-            "Team": log.teamMember,
-            "Catatan": log.notes || '-',
-            "Jumlah Foto": log.evidencePhotos?.length || 0,
-            "Tanggal Scan": new Date(log.timestamp).toLocaleString('id-ID')
-        }))
+        group.logs.map(log => {
+            const hasPhoto = log.evidencePhotos && log.evidencePhotos.length > 0;
+            const photoLink = hasPhoto ? `${window.location.origin}/?open_photo=${log.id}` : '-';
+            
+            return {
+                "Kode Barang": group.sku,
+                "Nama Barang": group.name,
+                "QTY System": log.systemQty ?? 0,
+                "QTY Fisik": log.physicalQty,
+                "Variance": log.variance ?? (log.physicalQty - (log.systemQty ?? 0)),
+                "Satuan": group.unit,
+                "Lokasi": log.location,
+                "Batch": log.batchNumber || '-',
+                "Expired": log.expiryDate || '-',
+                "Team": log.teamMember,
+                "Catatan": log.notes || '-',
+                "Jumlah Foto": log.evidencePhotos?.length || 0,
+                "Link Foto Bukti": photoLink,
+                "Tanggal Scan": new Date(log.timestamp).toLocaleString('id-ID')
+            };
+        })
     );
     const ws = XLSX.utils.json_to_sheet(exportRows);
     const wb = XLSX.utils.book_new();
