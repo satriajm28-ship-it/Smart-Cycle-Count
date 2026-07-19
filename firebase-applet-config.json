@@ -3,6 +3,7 @@
   "appId": "1:921554575755:web:70f878870f1330516acf8e",
   "apiKey": "AIzaSyBF5B4B-K8fWa_l73WdbE94edm0DrMIERY",
   "authDomain": "smart-cycle-count.firebaseapp.com",
+  "firestoreDatabaseId": "ai-studio-smartstockopname-4a08eff7-1b02-4072-b626-30b08e8094f0",
   "storageBucket": "smart-cycle-count.firebasestorage.app",
   "messagingSenderId": "921554575755",
   "measurementId": "",

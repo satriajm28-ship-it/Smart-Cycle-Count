@@ -96,7 +96,12 @@ export const AuditForm: React.FC<AuditFormProps> = ({ onSuccess, initialLocation
     }
 
     const normalizedSku = sku.trim().toLowerCase();
-    const match = allMasterItems.find(i => i.sku.toLowerCase() === normalizedSku);
+    let match = allMasterItems.find(i => i.sku.toLowerCase() === normalizedSku);
+    
+    // Fallback to searching by item name if SKU not found
+    if (!match && normalizedSku.length > 2) {
+      match = allMasterItems.find(i => i.name.toLowerCase().includes(normalizedSku));
+    }
 
     if (match) {
       setFoundItem(match);
@@ -320,7 +325,7 @@ export const AuditForm: React.FC<AuditFormProps> = ({ onSuccess, initialLocation
                 <div className="relative flex items-center">
                     <input 
                       className="w-full h-12 pl-4 pr-14 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 font-mono text-sm" 
-                      placeholder="Scan atau ketik kode barang..." 
+                      placeholder="Scan atau ketik kode / nama barang..." 
                       type="text" 
                       value={sku} 
                       onChange={(e) => setSku(e.target.value)} 

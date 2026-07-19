@@ -59,6 +59,7 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
 // Simple connection validation
 async function testConnection() {
   try {
+    console.log("Firebase DB ID:", (firebaseConfig as any).firestoreDatabaseId || "default");
     await getDocFromServer(doc(db, 'test', 'connection'));
     console.log("Firebase initialized and connected successfully.");
   } catch (error: any) {

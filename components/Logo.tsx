@@ -8,32 +8,73 @@ interface LogoProps {
 
 export const Logo: React.FC<LogoProps> = ({ className, size = 100 }) => {
   return (
-    <svg 
-      width={size} 
-      height={size} 
-      viewBox="0 0 512 512" 
-      fill="none" 
-      xmlns="http://www.w3.org/2000/svg"
-      className={className}
-    >
-      {/* Right Body Part (Cyan) */}
-      <path 
-        d="M340 250 L256 390" 
-        stroke="#4CC9F0" 
-        strokeWidth="135" 
-        strokeLinecap="round" 
-      />
+    <div className={className} style={{ width: size * 2, height: size }}>
+      <svg 
+        width="100%" 
+        height="100%" 
+        viewBox="0 0 600 300" 
+        fill="none" 
+        xmlns="http://www.w3.org/2000/svg"
+      >
+        {/* Red Background for K */}
+        <path 
+          d="M 270 20 L 140 20 A 110 110 0 0 0 140 240 L 270 240 Z" 
+          fill="#FF0000" 
+        />
+        
+        {/* Yellow K */}
+        <text 
+          x="155" 
+          y="225" 
+          fontFamily="Arial, Helvetica, sans-serif" 
+          fontSize="250" 
+          fontWeight="bold" 
+          fill="#FFFF00" 
+          textAnchor="middle"
+          letterSpacing="-10"
+        >
+          K
+        </text>
+        
+        {/* Green D */}
+        <text 
+          x="365" 
+          y="225" 
+          fontFamily="Arial, Helvetica, sans-serif" 
+          fontSize="250" 
+          fontWeight="bold" 
+          fill="#009900" 
+          textAnchor="middle"
+        >
+          D
+        </text>
 
-      {/* Left Body Part (Pink) */}
-      <path 
-        d="M172 250 L256 390" 
-        stroke="#F72585" 
-        strokeWidth="135" 
-        strokeLinecap="round" 
-      />
+        {/* Green E */}
+        <text 
+          x="515" 
+          y="225" 
+          fontFamily="Arial, Helvetica, sans-serif" 
+          fontSize="250" 
+          fontWeight="bold" 
+          fill="#009900" 
+          textAnchor="middle"
+        >
+          E
+        </text>
 
-      {/* Head (Blue) */}
-      <circle cx="256" cy="100" r="70" fill="#3A86FF" />
-    </svg>
+        {/* Pharmaceutical Trading & Distribution */}
+        <text 
+          x="320" 
+          y="285" 
+          fontFamily="Arial, Helvetica, sans-serif" 
+          fontSize="32" 
+          fontWeight="bold" 
+          fill="#009900" 
+          textAnchor="middle"
+        >
+          Pharmaceutical Trading &amp; Distribution
+        </text>
+      </svg>
+    </div>
   );
 };

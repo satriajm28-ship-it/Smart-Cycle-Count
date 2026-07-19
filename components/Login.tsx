@@ -74,7 +74,7 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
             <header className="fixed top-0 w-full z-50 flex items-center justify-between px-6 h-16">
                 <div className={`flex items-center gap-3 transition-opacity duration-700 ${isLampOn ? 'opacity-100' : 'opacity-30'}`}>
                     <Logo size={32} />
-                    <span className="text-lg font-bold uppercase tracking-widest font-headline text-white">PT Medika Bina Investama</span>
+                    <span className="text-lg font-bold uppercase tracking-widest font-headline text-white">PT. Ka Dua Empat</span>
                 </div>
             </header>
 
