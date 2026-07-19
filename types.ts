@@ -30,6 +30,7 @@ export interface AuditRecord {
   id: string;
   sku: string;
   itemName: string;
+  unit?: string;
   location: string;
   batchNumber: string;
   expiryDate: string;

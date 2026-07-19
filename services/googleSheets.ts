@@ -50,59 +50,9 @@ export function useGoogleAuth() {
 
 // Function to initialize or get the spreadsheet ID
 export const getOrInitializeSpreadsheet = async (accessToken: string): Promise<string> => {
-  let spreadsheetId = localStorage.getItem('audit_spreadsheet_id');
-  
-  if (spreadsheetId) {
-    return spreadsheetId;
-  }
-
-  // Create a new spreadsheet
-  const response = await fetch('https://sheets.googleapis.com/v4/spreadsheets', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${accessToken}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      properties: {
-        title: `Audit Fisik - ${new Date().toISOString().split('T')[0]}`
-      },
-      sheets: [
-        {
-          properties: {
-            title: 'Audit Logs'
-          }
-        }
-      ]
-    })
-  });
-
-  if (!response.ok) {
-    throw new Error('Failed to create spreadsheet');
-  }
-
-  const data = await response.json();
-  spreadsheetId = data.spreadsheetId;
-  localStorage.setItem('audit_spreadsheet_id', spreadsheetId!);
-
-  // Add headers
-  await appendRowToSheet(accessToken, spreadsheetId!, 'Audit Logs!A1:N1', [[
-    'Timestamp',
-    'Kode Barang (SKU)',
-    'Nama Barang',
-    'Lokasi',
-    'QTY System',
-    'QTY Fisik',
-    'Variance',
-    'Batch',
-    'Expired',
-    'Team / Petugas',
-    'Catatan',
-    'Foto Bukti (Link)',
-    'Log ID'
-  ]]);
-
-  return spreadsheetId!;
+  // Use the spreadsheet provided by the user
+  const spreadsheetId = '1OH-PS33N0WLgE4AMF6PpO2pL9kXfyNuQlDuQol-KwgA';
+  return spreadsheetId;
 };
 
 export const appendRowToSheet = async (accessToken: string, spreadsheetId: string, range: string, values: any[][]) => {
@@ -137,24 +87,40 @@ export const appendAuditLogToSheets = async (auditRecord: any) => {
 
   const spreadsheetId = await getOrInitializeSpreadsheet(token);
   
+  // Get spreadsheet info to get the first sheet's title
+  const spreadsheetInfoRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}`, {
+    headers: {
+      'Authorization': `Bearer ${token}`
+    }
+  });
+  
+  let sheetTitle = 'Sheet1';
+  if (spreadsheetInfoRes.ok) {
+    const info = await spreadsheetInfoRes.json();
+    if (info.sheets && info.sheets.length > 0) {
+      sheetTitle = info.sheets[0].properties.title;
+    }
+  }
+  
   const hasPhoto = auditRecord.evidencePhotos && auditRecord.evidencePhotos.length > 0;
   const photoLink = hasPhoto ? `${window.location.origin}/?open_photo=${auditRecord.id}` : '-';
 
   const rowData = [
-    new Date(auditRecord.timestamp).toLocaleString('id-ID'),
     auditRecord.sku,
     auditRecord.itemName,
-    auditRecord.location,
     auditRecord.systemQty,
     auditRecord.physicalQty,
     auditRecord.variance,
+    auditRecord.unit || '-',
+    auditRecord.location,
     auditRecord.batchNumber,
     auditRecord.expiryDate,
     auditRecord.teamMember,
     auditRecord.notes || '-',
+    auditRecord.evidencePhotos ? auditRecord.evidencePhotos.length : 0,
     photoLink,
-    auditRecord.id
+    new Date(auditRecord.timestamp).toLocaleString('id-ID')
   ];
 
-  await appendRowToSheet(token, spreadsheetId, 'Audit Logs!A:N', [rowData]);
+  await appendRowToSheet(token, spreadsheetId, `${sheetTitle}!A:N`, [rowData]);
 };

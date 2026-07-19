@@ -100,7 +100,11 @@ export const AuditForm: React.FC<AuditFormProps> = ({ onSuccess, initialLocation
     
     // Fallback to searching by item name if SKU not found
     if (!match && normalizedSku.length > 2) {
-      match = allMasterItems.find(i => i.name.toLowerCase().includes(normalizedSku));
+      const searchTerms = normalizedSku.split(' ').filter(t => t.length > 0);
+      match = allMasterItems.find(i => {
+         const lowerName = i.name.toLowerCase();
+         return searchTerms.every(term => lowerName.includes(term));
+      });
     }
 
     if (match) {
@@ -248,8 +252,9 @@ export const AuditForm: React.FC<AuditFormProps> = ({ onSuccess, initialLocation
     try {
       const auditRecord = {
         id: uuidv4(),
-        sku: sku.trim(), 
+        sku: foundItem ? foundItem.sku : sku.trim(), 
         itemName: activeItemName, 
+        unit: foundItem ? foundItem.unit : '-',
         location: location.trim().toUpperCase(), 
         batchNumber: batchNumber || '-', 
         expiryDate: expiryDate || '-',
@@ -297,7 +302,7 @@ export const AuditForm: React.FC<AuditFormProps> = ({ onSuccess, initialLocation
                     <Logo size={24} />
                     <h1 className="text-sm font-black uppercase tracking-tight">Audit Fisik</h1>
                 </div>
-                <span className="text-[9px] font-bold text-primary uppercase tracking-widest leading-none">MEDIKA BINA INVESTAMA</span>
+                <span className="text-[9px] font-bold text-primary uppercase tracking-widest leading-none">PT. Ka Dua Empat</span>
             </div>
             <div className="w-10"></div>
         </nav>
@@ -346,7 +351,14 @@ export const AuditForm: React.FC<AuditFormProps> = ({ onSuccess, initialLocation
                 {/* ITEM DETAILS CARD */}
                 <div className="bg-white dark:bg-slate-800/50 rounded-xl p-4 border border-slate-200 dark:border-slate-700 shadow-sm space-y-4">
                     <div>
-                        <span className="text-[10px] text-slate-400 block mb-1 uppercase font-bold tracking-tight">Nama Barang</span>
+                        <div className="flex items-center gap-2 mb-1">
+                            <span className="text-[10px] text-slate-400 uppercase font-bold tracking-tight">Nama Barang</span>
+                            {sku && (
+                                <span className="bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-300 px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider">
+                                    SKU: {foundItem ? foundItem.sku : sku}
+                                </span>
+                            )}
+                        </div>
                         <p className={`text-sm font-bold leading-tight ${!foundItem && sku ? 'text-amber-600 italic' : ''}`}>
                           {sku ? activeItemName : 'Silakan scan barang...'}
                         </p>

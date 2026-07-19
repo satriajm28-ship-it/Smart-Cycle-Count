@@ -195,7 +195,7 @@ const App: React.FC = () => {
             </div>
             <div className="text-center space-y-2">
                 <h1 className="text-4xl font-black uppercase tracking-widest">Monitoring</h1>
-                <p className="text-lg font-bold text-slate-400 tracking-wider">MEDIKA BINA INVESTAMA</p>
+                <p className="text-lg font-bold text-slate-400 tracking-wider">PT. Ka Dua Empat</p>
             </div>
             <div className="flex flex-col items-center gap-2 mt-8">
                 <span className="material-symbols-outlined animate-spin text-2xl text-primary">sync</span>
