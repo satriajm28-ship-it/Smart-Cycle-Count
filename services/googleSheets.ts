@@ -34,8 +34,13 @@ export function useGoogleAuth() {
       } else {
         console.error("No access token in credential");
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Login failed", error);
+      if (error.code === 'auth/unauthorized-domain') {
+        alert("Domain ini belum diizinkan di Firebase. Jika Anda deploy ke Vercel/host lain, silakan masuk ke Firebase Console -> Authentication -> Settings -> Authorized domains, lalu tambahkan domain ini (" + window.location.hostname + ").");
+      } else {
+        alert("Login Google gagal: " + error.message);
+      }
     }
   };
 
