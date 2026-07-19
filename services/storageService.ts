@@ -14,6 +14,7 @@ import {
 } from 'firebase/firestore';
 import { AuditRecord, MasterItem, MasterLocation, LocationState, LocationStatusType, ActivityLog } from '../types';
 import { v4 as uuidv4 } from 'uuid';
+import { appendAuditLogToSheets } from './googleSheets';
 
 const TABLES = {
   MASTER_DATA: 'master_data',
@@ -233,8 +234,21 @@ export const deleteAllMasterData = async (onStatus?: (msg: string) => void) => {
 
 export const saveAuditLog = async (record: AuditRecord) => {
   try {
+      // 1. Save to Google Sheets first
+      await appendAuditLogToSheets(record);
+
+      // 2. Save only minimal data to Firebase as requested
       try {
-          await setDoc(doc(db, TABLES.AUDIT_LOGS, record.id), record);
+          const minimalRecord = {
+              id: record.id,
+              teamMember: record.teamMember,
+              evidencePhotos: record.evidencePhotos || [],
+              itemName: record.itemName, // Needed for photo view
+              sku: record.sku, // Needed for photo view
+              location: record.location, // Needed for photo view
+              timestamp: record.timestamp
+          };
+          await setDoc(doc(db, TABLES.AUDIT_LOGS, record.id), minimalRecord);
       } catch (error) {
           handleFirestoreError(error, OperationType.WRITE, `${TABLES.AUDIT_LOGS}/${record.id}`);
       }
@@ -254,18 +268,22 @@ export const saveAuditLog = async (record: AuditRecord) => {
           handleFirestoreError(error, OperationType.WRITE, `${TABLES.LOCATION_STATES}/${record.location}`);
       }
       
+      // Update local storage so dashboard still shows it temporarily if needed
+      const currentLogs = getLocal<AuditRecord[]>(LOCAL_KEYS.AUDIT_LOGS, []);
+      setLocal(LOCAL_KEYS.AUDIT_LOGS, [record, ...currentLogs]);
+      
       window.dispatchEvent(new Event('auditDataChanged'));
       
       await saveActivityLog({
           type: 'scan',
-          title: 'Scan Terverifikasi',
+          title: 'Scan Terverifikasi (Tersimpan ke Sheets)',
           description: `Operator: ${record.teamMember} memindai ${record.physicalQty} unit SKU: ${record.sku}`,
           user: record.teamMember,
           details: `Lokasi: ${record.location}`,
           photos: record.evidencePhotos
       });
   } catch (error: any) {
-      console.error("Cloud save failed:", error);
+      console.error("Save failed:", error);
       throw error;
   }
 };

@@ -14,6 +14,7 @@ import { Home, ClipboardList, Database, Activity } from 'lucide-react';
 import { getSessionUser, clearSessionUser, bootstrapUsers } from './services/authService';
 import { db } from './services/firebaseClient';
 import { doc, getDoc } from 'firebase/firestore';
+import { useGoogleAuth } from './services/googleSheets';
 
 const App: React.FC = () => {
   const [view, setView] = useState<AppView>(AppView.DASHBOARD);
@@ -22,6 +23,8 @@ const App: React.FC = () => {
   // Authentication State
   const [isDbConnected, setIsDbConnected] = useState(false);
   const [currentUser, setCurrentUser] = useState<AppUser | null>(null);
+  const { token: googleToken, login: loginGoogle, isLoaded: isGoogleLoaded } = useGoogleAuth();
+
   
   const [isOnline, setIsOnline] = useState(navigator.onLine);
 
@@ -275,6 +278,29 @@ const App: React.FC = () => {
   // 2. Show Login Screen if not logged in locally
   if (!currentUser) {
       return <Login onLoginSuccess={handleLoginSuccess} />;
+  }
+
+  // 2.5 Show Google Login Screen if they lack token
+  if (!googleToken) {
+    return (
+        <div className="flex flex-col items-center justify-center min-h-screen bg-[#050A18] text-white gap-6 px-6 text-center">
+            <Logo size={80} />
+            <div className="space-y-2">
+                <h1 className="text-2xl font-black uppercase tracking-tight">Koneksi Spreadsheet</h1>
+                <p className="text-sm font-medium text-slate-400">Anda perlu menghubungkan akun Google untuk menyimpan hasil input otomatis ke Google Sheets.</p>
+            </div>
+            
+            <button 
+                onClick={loginGoogle}
+                disabled={!isGoogleLoaded}
+                className="bg-white text-slate-900 px-6 py-3 rounded-xl font-bold text-sm shadow-xl flex items-center gap-3 transition-transform active:scale-95 disabled:opacity-50"
+            >
+                <img src="https://upload.wikimedia.org/wikipedia/commons/5/53/Google_%22G%22_Logo.svg" className="w-5 h-5" alt="Google" />
+                {isGoogleLoaded ? 'Hubungkan dengan Google' : 'Memuat...'}
+            </button>
+            <p className="text-[10px] text-slate-500 font-medium">Memerlukan akses Google Sheets</p>
+        </div>
+    );
   }
 
   // 3. Main App
